@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Employee } from './types';
 import { X, Printer, Check, Copy, Sliders, ChevronRight, Download, Users, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -381,7 +382,7 @@ export default function EmployeeCardModal({ isOpen, onClose, employee, allEmploy
       </div>
 
       {/* 2. PRINT-READY DIRECT VIEWPORT OVERLAY (ONLY VISIBLE ON window.print() ) */}
-      {isPrinting && (
+      {isPrinting && createPortal(
         <div id="badge-printing-plane" className="absolute inset-0 bg-white z-9999 font-sans text-black">
           {(() => {
             const chunks: Employee[][] = [];
@@ -401,7 +402,8 @@ export default function EmployeeCardModal({ isOpen, onClose, employee, allEmploy
               </div>
             ));
           })()}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

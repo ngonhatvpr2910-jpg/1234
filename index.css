@@ -17,8 +17,8 @@
     print-color-adjust: exact !important;
   }
 
-  /* Force display none on all other elements inside the React root */
-  #root > *:not(#badge-printing-plane) {
+  /* Hide all elements that are children of body, except badge-printing-plane */
+  body > *:not(#badge-printing-plane) {
     display: none !important;
   }
 
