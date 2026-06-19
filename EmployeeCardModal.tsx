@@ -383,17 +383,24 @@ export default function EmployeeCardModal({ isOpen, onClose, employee, allEmploy
       {/* 2. PRINT-READY DIRECT VIEWPORT OVERLAY (ONLY VISIBLE ON window.print() ) */}
       {isPrinting && (
         <div id="badge-printing-plane" className="absolute inset-0 bg-white z-9999 font-sans text-black">
-          <div className="print-grid p-4 flex flex-wrap gap-x-6 gap-y-8 justify-center">
-            {resolvedSelectedEmployees.map((emp) => (
-              <div 
-                key={`print-badge-${emp.id}`}
-                className="print-card-wrapper inline-block m-2"
-                style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
-              >
-                <EmployeeIDCard employee={emp} plantTitle={plantTitle} />
+          {(() => {
+            const chunks: Employee[][] = [];
+            for (let i = 0; i < resolvedSelectedEmployees.length; i += 10) {
+              chunks.push(resolvedSelectedEmployees.slice(i, i + 10));
+            }
+            return chunks.map((chunk, chunkIndex) => (
+              <div key={`print-page-${chunkIndex}`} className="print-page">
+                {chunk.map((emp) => (
+                  <div 
+                    key={`print-badge-${emp.id}`}
+                    className="print-card-wrapper inline-block"
+                  >
+                    <EmployeeIDCard employee={emp} plantTitle={plantTitle} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ));
+          })()}
         </div>
       )}
     </>
