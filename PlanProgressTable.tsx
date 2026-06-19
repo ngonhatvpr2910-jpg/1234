@@ -227,7 +227,7 @@ export default function PlanProgressTable({
       const isLineMatch = emp.line === line;
       const empDateISO = normalizeDateToISO(emp.resignDate || '');
       const isDateMatch = empDateISO === targetISO;
-      const isStatusMatch = emp.status === 'RESIGNED';
+      const isStatusMatch = emp.status === 'RESIGNED' || emp.status === 'LEAVE';
       return isLineMatch && isDateMatch && isStatusMatch;
     }).length;
   };
@@ -250,6 +250,9 @@ export default function PlanProgressTable({
   };
 
   const getDemandCount = (line: AssemblyLine, day: DayProgress) => {
+    if (autoSync) {
+      return getActualResignedCount(line, day.fullDate);
+    }
     return day.targets[line].demand ?? 0;
   };
 
@@ -354,7 +357,7 @@ export default function PlanProgressTable({
 
       {/* TABLE 1: NHU CẦU TUYỂN DỤNG THEO NGÀY */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/20 border-b border-slate-100 flex justify-between items-center">
+        <div className="p-5 bg-gradient-to-r from-indigo-50/50 to-blue-50/20 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
               <Target size={18} />
@@ -366,10 +369,44 @@ export default function PlanProgressTable({
               <p className="text-xs text-slate-500 mt-0.5">Số lượng nhân lực cần tiếp ứng - Bạn có thể đổi lịch, sửa ngày, thêm ngày mới</p>
             </div>
           </div>
-          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider">
-            KH Nhu Cầu
-          </span>
+          
+          <div className="flex items-center gap-2.5 self-stretch md:self-auto justify-between md:justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const newVal = !autoSync;
+                setAutoSync(newVal);
+                try {
+                  localStorage.setItem('dclr_autosync_v1', String(newVal));
+                } catch (_) {}
+              }}
+              className={`flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1.5 rounded-full border transition-all cursor-pointer ${
+                autoSync 
+                  ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100 animate-pulse' 
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+              title="Tự động nhảy số lượng cần tuyển dựa trên số lượng nhân sự đã thôi việc/xin nghỉ của GĐ 1"
+            >
+              <RefreshCw size={11} className={`${autoSync ? 'animate-spin-slow text-rose-600' : 'text-slate-400'} shrink-0`} />
+              LIÊN THÔNG TỰ ĐỘNG (GĐ 1): {autoSync ? 'BẬT (TỰ ĐỘNG THEO NS THÔI VIỆC)' : 'TẮT (NHẬP TAY THỦ CÔNG)'}
+            </button>
+            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider hidden sm:inline-block">
+              KH Nhu Cầu
+            </span>
+          </div>
         </div>
+
+        {autoSync && (
+          <div className="bg-rose-50/50 border-b border-rose-100/65 px-5 py-3 text-xs text-rose-800 flex items-start sm:items-center gap-2.5 font-medium transition-all">
+            <span className="flex h-2.5 w-2.5 relative mt-0.5 sm:mt-0 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+            </span>
+            <span className="leading-normal">
+              <strong>Liên thông tự động (Giai đoạn 1 ➡️ Giai đoạn 2):</strong> Nhu cầu tuyển dụng hôm nay sẽ được <strong>tự động tạo lập bổ sung</strong> tương ứng khi Giám sát (DCLR/RMA-BG) ghi nhận ngày nghỉ phép hoặc thôi việc của nhân sự tại Giai đoạn 1.
+            </span>
+          </div>
+        )}
 
         {/* Demand grid */}
         <div className="overflow-x-auto">
@@ -462,13 +499,16 @@ export default function PlanProgressTable({
                 </td>
                 
                 {currentDaysList.map((day, dIdx) => {
-                  const baseVal = isEditing 
-                    ? tempProgress[dIdx].targets['DCLR'].demand ?? 0 
-                    : day.targets['DCLR'].demand ?? 0;
+                  const baseVal = autoSync
+                    ? getActualResignedCount('DCLR', day.fullDate)
+                    : (isEditing 
+                        ? tempProgress[dIdx].targets['DCLR'].demand ?? 0 
+                        : day.targets['DCLR'].demand ?? 0);
+                  const _unusedDclrVal = isEditing 
 
                   return (
                     <td key={`demand-dclr-cell-${dIdx}`} className="py-2 px-1 border-r border-slate-150 text-center">
-                      {isEditing ? (
+                      {isEditing && !autoSync ? (
                         <input 
                           type="number" 
                           value={baseVal || ''} 
@@ -477,9 +517,16 @@ export default function PlanProgressTable({
                           className="w-16 text-center font-black text-slate-900 bg-amber-50 rounded border border-amber-300 py-1 shadow-xs focus:ring-1 focus:ring-amber-400 focus:outline-none text-xs"
                         />
                       ) : (
-                        <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
-                          {baseVal || '-'}
-                        </span>
+                        <div className="flex flex-col items-center justify-center">
+                          <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
+                            {baseVal || '-'}
+                          </span>
+                          {autoSync && baseVal > 0 && (
+                            <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 flex items-center justify-center gap-0.5 mt-0.5 whitespace-nowrap scale-90" title="Tự động tính theo NS thôi việc">
+                              🔄 Tự động
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                   );
@@ -516,13 +563,16 @@ export default function PlanProgressTable({
                 </td>
                 
                 {currentDaysList.map((day, dIdx) => {
-                  const baseVal = isEditing 
-                    ? tempProgress[dIdx].targets['DC RMA BG'].demand ?? 0 
-                    : day.targets['DC RMA BG'].demand ?? 0;
+                  const baseVal = autoSync
+                    ? getActualResignedCount('DC RMA BG', day.fullDate)
+                    : (isEditing 
+                        ? tempProgress[dIdx].targets['DC RMA BG'].demand ?? 0 
+                        : day.targets['DC RMA BG'].demand ?? 0);
+                  const _unusedRmaVal = isEditing 
 
                   return (
                     <td key={`demand-rma-cell-${dIdx}`} className="py-2 px-1 border-r border-slate-150 text-center">
-                      {isEditing ? (
+                      {isEditing && !autoSync ? (
                         <input 
                           type="number" 
                           value={baseVal || ''} 
@@ -531,9 +581,16 @@ export default function PlanProgressTable({
                           className="w-16 text-center font-black text-slate-900 bg-amber-50 rounded border border-amber-300 py-1 shadow-xs focus:ring-1 focus:ring-amber-400 focus:outline-none text-xs"
                         />
                       ) : (
-                        <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
-                          {baseVal || '-'}
-                        </span>
+                        <div className="flex flex-col items-center justify-center">
+                          <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
+                            {baseVal || '-'}
+                          </span>
+                          {autoSync && baseVal > 0 && (
+                            <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 flex items-center justify-center gap-0.5 mt-0.5 whitespace-nowrap scale-90" title="Tự động tính theo NS thôi việc">
+                              🔄 Tự động
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                   );
