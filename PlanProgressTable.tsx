@@ -7,6 +7,8 @@ interface PlanProgressTableProps {
   employees: Employee[];
   dayProgress: DayProgress[];
   onUpdateTargets: (updatedProgress: DayProgress[]) => void;
+  lineCapacities?: Record<AssemblyLine, { target: number; currentBase: number }>;
+  onUpdateLineCapacities?: (updatedCapacities: Record<AssemblyLine, { target: number; currentBase: number }>) => void;
 }
 
 // Helper to parse manually inputted date formats and return standard YYYY-MM-DD
@@ -75,7 +77,27 @@ export const getTodayISO = (): string => {
 };
 
 
-export default function PlanProgressTable({ employees, dayProgress, onUpdateTargets }: PlanProgressTableProps) {
+export default function PlanProgressTable({ 
+  employees, 
+  dayProgress, 
+  onUpdateTargets,
+  lineCapacities,
+  onUpdateLineCapacities
+}: PlanProgressTableProps) {
+  const capacities = lineCapacities || LINE_CAPACITIES;
+
+  const handleCapacityChange = (line: AssemblyLine, value: number) => {
+    if (onUpdateLineCapacities) {
+      onUpdateLineCapacities({
+        ...capacities,
+        [line]: {
+          ...capacities[line],
+          target: value
+        }
+      });
+    }
+  };
+
   const [isEditing, setIsEditing] = useState(false);
   const [tempProgress, setTempProgress] = useState<DayProgress[]>([]);
   
@@ -356,6 +378,7 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
               <tr className="bg-slate-50 text-slate-600 border-b border-slate-150 text-xs">
                 <th className="py-3 px-3 border-r border-slate-200 text-center font-bold w-12">STT</th>
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-40">DÂY CHUYỀN MALIK</th>
+                <th className="py-3 px-4 border-r border-slate-200 text-center font-bold w-24 text-indigo-900 bg-indigo-50/40">ĐỊNH BIÊN</th>
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-32">QUẢN LÝ T.N</th>
                 
                 {/* Columns representing days */}
@@ -419,6 +442,21 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
                 <td className="py-3.5 px-4 font-bold text-slate-800 border-r border-slate-150">
                   DCLR
                 </td>
+                <td className="py-3.5 px-4 text-center font-extrabold text-slate-705 border-r border-slate-150 bg-indigo-50/10">
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number"
+                      value={capacities['DCLR'].target}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        handleCapacityChange('DCLR', isNaN(val) ? 0 : val);
+                      }}
+                      className="w-14 px-1 py-0.5 text-center font-extrabold text-slate-800 bg-white border border-slate-350 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none text-xs"
+                      min="0"
+                    />
+                    <span className="text-[11px] font-semibold text-slate-500">NS</span>
+                  </div>
+                </td>
                 <td className="py-3.5 px-4 text-indigo-700 font-semibold border-r border-slate-150 text-[13px]">
                   {lineDetails.DCLR.manager}
                 </td>
@@ -458,6 +496,21 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
                 <td className="py-3.5 px-4 font-bold text-slate-800 border-r border-slate-150">
                   DC RMA BG
                 </td>
+                <td className="py-3.5 px-4 text-center font-extrabold text-slate-705 border-r border-slate-150 bg-indigo-50/10">
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number"
+                      value={capacities['DC RMA BG'].target}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        handleCapacityChange('DC RMA BG', isNaN(val) ? 0 : val);
+                      }}
+                      className="w-14 px-1 py-0.5 text-center font-extrabold text-slate-800 bg-white border border-slate-350 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none text-xs"
+                      min="0"
+                    />
+                    <span className="text-[11px] font-semibold text-slate-500">NS</span>
+                  </div>
+                </td>
                 <td className="py-3.5 px-4 text-indigo-700 font-semibold border-r border-slate-150 text-[13px]">
                   {lineDetails.RMA.manager}
                 </td>
@@ -493,8 +546,8 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
 
               {/* Row 3: Total Row */}
               <tr className="bg-slate-50 font-bold border-t border-t-slate-300">
-                <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={3}>
-                  TỔNG CỘNG NHU CẦU ĐỀ XUẤT
+                <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={4}>
+                  TỔNG CỘNG NHU CẦU ĐỀ XUẤT (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS)
                 </td>
                 {currentDaysList.map((day, dIdx) => {
                   const sumValue = getDemandCount('DCLR', day) + getDemandCount('DC RMA BG', day);
@@ -577,6 +630,7 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
               <tr className="bg-slate-50 text-slate-600 border-b border-slate-150 text-xs">
                 <th className="py-3 px-3 border-r border-slate-200 text-center font-bold w-12" rowSpan={2}>STT</th>
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-40" rowSpan={2}>DÂY CHUYỀN THỰC TẾ</th>
+                <th className="py-3 px-4 border-r border-slate-200 text-center font-bold w-24 text-indigo-900 bg-indigo-50/40" rowSpan={2}>ĐỊNH BIÊN</th>
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-32" rowSpan={2}>QUẢN LÝ T.N</th>
                 
                 {currentDaysList.map((day, dIdx) => (
@@ -617,7 +671,22 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
               <tr className="hover:bg-slate-50/50 border-b border-slate-150">
                 <td className="py-4 px-3 text-center text-slate-500 font-medium border-r border-slate-150">1</td>
                 <td className="py-4 px-4 font-bold text-slate-800 border-r border-slate-150">
-                  DCLR <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DCLR' && e.status === 'WORKING').length}/{LINE_CAPACITIES['DCLR'].target})</span>
+                  DCLR <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DCLR' && e.status === 'WORKING').length} hiện hữu)</span>
+                </td>
+                <td className="py-4 px-4 text-center font-extrabold text-slate-705 border-r border-slate-150 bg-indigo-50/10">
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number"
+                      value={capacities['DCLR'].target}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        handleCapacityChange('DCLR', isNaN(val) ? 0 : val);
+                      }}
+                      className="w-14 px-1 py-0.5 text-center font-extrabold text-slate-800 bg-white border border-slate-350 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none text-xs"
+                      min="0"
+                    />
+                    <span className="text-[11px] font-semibold text-slate-500">NS</span>
+                  </div>
                 </td>
                 <td className="py-4 px-4 text-indigo-700 font-semibold border-r border-slate-150 text-[13px]">
                   {lineDetails.DCLR.manager}
@@ -721,7 +790,22 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
               <tr className="hover:bg-slate-50/50 border-b border-slate-150">
                 <td className="py-4 px-3 text-center text-slate-500 font-medium border-r border-slate-150">2</td>
                 <td className="py-4 px-4 font-bold text-slate-800 border-r border-slate-150">
-                  DC RMA BG <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DC RMA BG' && e.status === 'WORKING').length}/{LINE_CAPACITIES['DC RMA BG'].target})</span>
+                  DC RMA BG <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DC RMA BG' && e.status === 'WORKING').length} hiện hữu)</span>
+                </td>
+                <td className="py-4 px-4 text-center font-extrabold text-slate-750 border-r border-slate-150 bg-indigo-50/10">
+                  <div className="flex items-center justify-center gap-1">
+                    <input
+                      type="number"
+                      value={capacities['DC RMA BG'].target}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        handleCapacityChange('DC RMA BG', isNaN(val) ? 0 : val);
+                      }}
+                      className="w-14 px-1 py-0.5 text-center font-extrabold text-slate-800 bg-white border border-slate-350 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none text-xs"
+                      min="0"
+                    />
+                    <span className="text-[11px] font-semibold text-slate-500">NS</span>
+                  </div>
                 </td>
                 <td className="py-4 px-4 text-indigo-700 font-semibold border-r border-slate-150 text-[13px]">
                   {lineDetails.RMA.manager}
@@ -823,8 +907,8 @@ export default function PlanProgressTable({ employees, dayProgress, onUpdateTarg
 
               {/* Row 3: Total Row */}
               <tr className="bg-slate-50 font-bold border-t border-t-slate-300">
-                <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={3}>
-                  TỔNG CỘNG KH & THỰC TIẾP NHẬN
+                <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={4}>
+                  TỔNG CỘNG KH & THỰC TIẾP NHẬN (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS - Hiện hữu {employees.filter(e => e.status === 'WORKING').length} NS)
                 </td>
                 {currentDaysList.map((day, dIdx) => {
                   const dayPlanned = getDemandCount('DCLR', day) + getDemandCount('DC RMA BG', day);

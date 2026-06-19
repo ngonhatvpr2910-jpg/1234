@@ -5,9 +5,11 @@ import { LINE_CAPACITIES } from './mockData';
 interface StatsSectionProps {
   employees: Employee[];
   selectedLine: AssemblyLine | 'ALL';
+  lineCapacities?: Record<AssemblyLine, { target: number; currentBase: number }>;
 }
 
-export default function StatsSection({ employees, selectedLine }: StatsSectionProps) {
+export default function StatsSection({ employees, selectedLine, lineCapacities }: StatsSectionProps) {
+  const capacities = lineCapacities || LINE_CAPACITIES;
   // Filters
   const filteredList = employees.filter(emp => selectedLine === 'ALL' || emp.line === selectedLine);
   
@@ -145,11 +147,11 @@ export default function StatsSection({ employees, selectedLine }: StatsSectionPr
   let capacityText = "";
   let targetNum = 0;
   if (selectedLine === 'ALL') {
-    const totalTarget = LINE_CAPACITIES['DCLR'].target + LINE_CAPACITIES['DC RMA BG'].target;
+    const totalTarget = capacities['DCLR'].target + capacities['DC RMA BG'].target;
     targetNum = totalTarget;
     capacityText = `${totalActive} / ${totalTarget}`;
   } else {
-    const target = LINE_CAPACITIES[selectedLine].target;
+    const target = capacities[selectedLine].target;
     targetNum = target;
     capacityText = `${totalActive} / ${target}`;
   }

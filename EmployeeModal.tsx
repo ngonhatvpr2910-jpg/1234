@@ -492,6 +492,11 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                     <option value="RESIGNED">Đã thôi việc hẳn (Chấm dứt HĐ)</option>
                     <option value="LEAVE">Nghỉ phép / Nghỉ việc tạm thời</option>
                   </select>
+                  {employee && (employee.status === 'RESIGNED' || employee.status === 'LEAVE') && (status === 'WORKING' || status === 'ONBOARDING') && (
+                    <p className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1 bg-emerald-50 p-2 rounded-lg border border-emerald-150 animate-slide-up">
+                      ✨ Nhân sự thay đổi ý định thôi việc. Trạng thái thôi việc sẽ được HỦY và khôi phục hoạt động khi lưu!
+                    </p>
+                  )}
                 </div>
               </div>
 

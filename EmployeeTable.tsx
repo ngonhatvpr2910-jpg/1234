@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, AssemblyLine, EmployeeStatus } from './types';
-import { Search, UserPlus, FileSpreadsheet, Edit3, Trash2, UserMinus, Settings, MapPin, Calendar, HelpCircle, Filter, Check } from 'lucide-react';
+import { Search, UserPlus, FileSpreadsheet, Edit3, Trash2, UserMinus, Settings, MapPin, Calendar, HelpCircle, Filter, Check, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import ExcelImporter from './ExcelImporter';
 
 interface EmployeeTableProps {
@@ -110,6 +111,7 @@ export default function EmployeeTable({
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [monthFilter, setMonthFilter] = useState<string>('ALL');
   const [yearFilter, setYearFilter] = useState<string>('ALL');
+  const [restoreConfirmationEmp, setRestoreConfirmationEmp] = useState<Employee | null>(null);
   
   // Sorting state
   const [sortField, setSortField] = useState<'code' | 'fullName' | 'joinDate' | 'status'>('joinDate');
@@ -761,6 +763,28 @@ export default function EmployeeTable({
                             <UserMinus size={15} />
                           </button>
                         )}
+
+                         {/* Restore button (hủy thôi việc, quay lại làm việc) */}
+                         {isResigned && (
+                           <button
+                             onClick={() => setRestoreConfirmationEmp(emp)}
+                             title="Hủy thôi việc & Khôi phục làm việc"
+                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition animate-pulse"
+                           >
+                             <UserPlus size={15} />
+                           </button>
+                         )}
+ 
+                         {/* Return to work button for Leave status */}
+                         {emp.status === 'LEAVE' && (
+                           <button
+                             onClick={() => setRestoreConfirmationEmp(emp)}
+                             title="Quay lại làm việc"
+                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                           >
+                             <UserPlus size={15} />
+                           </button>
+                         )}
                         
                         {/* Edit button */}
                         <button
@@ -788,6 +812,104 @@ export default function EmployeeTable({
           </tbody>
         </table>
       </div>
+
+      {/* CUSTOM BEAUTIFUL RESTORE/CANCEL RESIGNATION CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {restoreConfirmationEmp && (() => {
+          const emp = restoreConfirmationEmp;
+          const isResigned = emp.status === 'RESIGNED';
+          
+          return (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.15 }}
+                className="bg-white rounded-2xl shadow-xl border border-slate-150 max-w-md w-full overflow-hidden"
+              >
+                {/* Header info */}
+                <div className="p-6 pb-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 flex-shrink-0">
+                      <UserPlus size={24} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-slate-950 text-base leading-6">
+                        {isResigned ? "Hủy quyết định thôi việc" : "Hủy kỳ nghỉ phép & Đi học lại"}
+                      </h3>
+                      <p className="text-slate-500 text-xs leading-relaxed">
+                        {isResigned 
+                          ? "Nhân viên đã thay đổi ý định và muốn tiếp tục đồng hành cùng công ty. Toàn bộ thông tin thôi việc liên quan sẽ được gỡ bỏ."
+                          : "Nhân viên kết thúc thời gian nghỉ phép hoặc nghỉ tạm thời trước thời hạn và quay lại làm việc bình thường."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main content body showing targeted employee details */}
+                <div className="bg-slate-50/70 border-y border-slate-100 px-6 py-4 space-y-3">
+                  <div className="grid grid-cols-3 gap-y-2 text-xs">
+                    <span className="text-slate-400 font-medium col-span-1">Mã nhân sự:</span>
+                    <span className="font-mono font-bold text-slate-700 col-span-2">{emp.code}</span>
+
+                    <span className="text-slate-400 font-medium col-span-1">Họ và Tên:</span>
+                    <span className="font-bold text-slate-900 col-span-2">{emp.fullName}</span>
+
+                    <span className="text-slate-400 font-medium col-span-1">Dây chuyền:</span>
+                    <span className="font-semibold text-slate-800 col-span-2">{emp.line}</span>
+
+                    {emp.resignDate && (
+                      <>
+                        <span className="text-slate-400 font-medium col-span-1">Ngày {isResigned ? "thôi" : "bắt đầu"} nghỉ:</span>
+                        <span className="font-semibold text-rose-600 col-span-2">{emp.resignDate}</span>
+                      </>
+                    )}
+
+                    {emp.resignReason && (
+                      <>
+                        <span className="text-slate-400 font-medium col-span-1">Lý do ghi nhận:</span>
+                        <span className="italic text-slate-600 col-span-2 font-medium bg-white/85 px-2 py-1 rounded border border-slate-100">{emp.resignReason}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Call-to-action warning */}
+                <div className="px-6 py-3 bg-emerald-50/40 text-emerald-800 text-[11px] font-semibold border-b border-slate-100 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-emerald-600 flex-shrink-0" />
+                  <span>Xác nhận khôi phục lại trạng thái <strong>ĐANG LÀM VIỆC</strong> cho nhân sự này?</span>
+                </div>
+
+                {/* Action controls */}
+                <div className="px-6 py-4 flex items-center justify-end gap-3 bg-white">
+                  <button
+                    onClick={() => setRestoreConfirmationEmp(null)}
+                    type="button"
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-xl border border-slate-200 transition cursor-pointer"
+                  >
+                    Bỏ qua
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (onUpdateField) {
+                        onUpdateField(emp.id, 'status', 'WORKING');
+                      }
+                      setRestoreConfirmationEmp(null);
+                    }}
+                    type="button"
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-sm hover:shadow transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check size={14} />
+                    <span>Hủy thôi việc & Khôi phục</span>
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }

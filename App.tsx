@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Employee, DayProgress, AssemblyLine } from './types';
-import { INITIAL_EMPLOYEES, DRILL_DATES } from './mockData';
+import { INITIAL_EMPLOYEES, DRILL_DATES, LINE_CAPACITIES } from './mockData';
 import StatsSection from './StatsSection';
 import PlanProgressTable from './PlanProgressTable';
 import EmployeeTable from './EmployeeTable';
@@ -18,6 +18,10 @@ export default function App() {
   // --- STATE PERSISTENCE CLIENT-SIDE ---
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [dayProgress, setDayProgress] = useState<DayProgress[]>([]);
+  const [lineCapacities, setLineCapacities] = useState<Record<AssemblyLine, { target: number; currentBase: number }>>({
+    'DCLR': { target: 58, currentBase: 72 },
+    'DC RMA BG': { target: 15, currentBase: 7 }
+  });
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // Load from LocalStorage
@@ -25,6 +29,16 @@ export default function App() {
     try {
       const storedEmployees = localStorage.getItem('dclr_employees_v1');
       const storedProgress = localStorage.getItem('dclr_progress_v1');
+      const storedCapacities = localStorage.getItem('dclr_capacities_v1');
+
+      if (storedCapacities) {
+        setLineCapacities(JSON.parse(storedCapacities));
+      } else {
+        setLineCapacities({
+          'DCLR': { target: 58, currentBase: 72 },
+          'DC RMA BG': { target: 15, currentBase: 7 }
+        });
+      }
 
       if (storedEmployees) {
         let parsed = JSON.parse(storedEmployees) as Employee[];
@@ -88,6 +102,15 @@ export default function App() {
     setDayProgress(updatedProgress);
     try {
       localStorage.setItem('dclr_progress_v1', JSON.stringify(updatedProgress));
+    } catch (e) {
+      console.error('LocalStorage write failed:', e);
+    }
+  };
+
+  const handleUpdateLineCapacities = (updatedCapacities: Record<AssemblyLine, { target: number; currentBase: number }>) => {
+    setLineCapacities(updatedCapacities);
+    try {
+      localStorage.setItem('dclr_capacities_v1', JSON.stringify(updatedCapacities));
     } catch (e) {
       console.error('LocalStorage write failed:', e);
     }
@@ -167,10 +190,16 @@ export default function App() {
       // Edit or Resign employee
       updated = employees.map(emp => {
         if (emp.id === employeeData.id) {
-          return {
+          const merged = {
             ...emp,
             ...employeeData
           } as Employee;
+          
+          if (merged.status === 'WORKING' || merged.status === 'ONBOARDING') {
+            delete merged.resignDate;
+            delete merged.resignReason;
+          }
+          return merged;
         }
         return emp;
       });
@@ -230,10 +259,15 @@ export default function App() {
         const updatedEmp = {
           ...emp,
           [field]: value
-        };
+        } as Employee;
         // Auto update manager if line is changed
         if (field === 'line') {
           updatedEmp.manager = value === 'DCLR' ? 'KHIÊM' : 'THỊNH';
+        }
+        // Clear resign info if returning to active status
+        if (field === 'status' && (value === 'WORKING' || value === 'ONBOARDING')) {
+          delete updatedEmp.resignDate;
+          delete updatedEmp.resignReason;
         }
         return updatedEmp;
       }
@@ -367,7 +401,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
         
         {/* STATS OVERVIEW IS CONSTANTLY VISIBLE TO REDUCE BLIND SPOTS */}
-        <StatsSection employees={employees} selectedLine={selectedLine} />
+        <StatsSection employees={employees} selectedLine={selectedLine} lineCapacities={lineCapacities} />
 
         {/* TRANSITIONAL TAB STATES ANIMATED WITH MOTION */}
         <div className="mt-4">
@@ -410,6 +444,8 @@ export default function App() {
                   employees={employees}
                   dayProgress={dayProgress}
                   onUpdateTargets={handleUpdateTargets}
+                  lineCapacities={lineCapacities}
+                  onUpdateLineCapacities={handleUpdateLineCapacities}
                 />
               </motion.div>
             )}
