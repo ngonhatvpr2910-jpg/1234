@@ -451,6 +451,22 @@ function EmployeeIDCard({ employee, plantTitle, interactive = false, onPhotoUplo
   // Custom backgrounds: Light pastel yellow for new hire, light pastel blue for probation, white for old staff
   const bgColor = isNewHire ? '#fffbeb' : (isProbation ? '#eef7ff' : '#ffffff');
 
+  // Helper to dynamically adjust name size based on its length to support ultra-long names without overlap or truncating
+  const getNameFontSize = (name: string) => {
+    const len = name.trim().length;
+    if (isNewHire) {
+      if (len > 30) return 'text-[9.5px]';
+      if (len > 24) return 'text-[10.5px]';
+      if (len > 18) return 'text-[11.5px]';
+      return 'text-[13px]';
+    } else {
+      if (len > 30) return 'text-[11px]';
+      if (len > 24) return 'text-[12.5px]';
+      if (len > 18) return 'text-[14.5px]';
+      return 'text-[17px]';
+    }
+  };
+
   return (
     <div 
       className="border border-slate-250 rounded-xl overflow-hidden relative shadow-sm font-sans flex flex-col text-black shrink-0 select-none"
@@ -565,13 +581,13 @@ function EmployeeIDCard({ employee, plantTitle, interactive = false, onPhotoUplo
         </div>
 
         {/* Middle Area for Name and Info */}
-        <div className="flex-1 pl-4 flex flex-col justify-center items-start pr-14 select-text">
+        <div className="flex-1 pl-4 flex flex-col justify-center items-start pr-16 select-text">
           {isNewHire && (
             <div className="text-[19px] font-black text-amber-600 tracking-tight mb-1 leading-none uppercase">
               NHẬN VIỆC MỚI
             </div>
           )}
-          <h4 className={`font-extrabold text-slate-950 font-sans tracking-tight mb-1 text-left leading-tight capitalize truncate w-full ${isNewHire ? 'text-[13px]' : 'text-[17px]'}`}>
+          <h4 className={`font-extrabold text-slate-950 font-sans tracking-tight mb-0.5 text-left leading-tight capitalize break-words w-full ${getNameFontSize(employee.fullName)}`}>
             {employee.fullName.toLowerCase()}
           </h4>
           <p className="text-[11px] font-black text-slate-850 tracking-wider font-mono uppercase text-left">
