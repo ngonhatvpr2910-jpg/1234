@@ -85,6 +85,7 @@ export default function PlanProgressTable({
   onUpdateLineCapacities
 }: PlanProgressTableProps) {
   const capacities = lineCapacities || LINE_CAPACITIES;
+  const todayISO = getTodayISO();
 
   const handleCapacityChange = (line: AssemblyLine, value: number) => {
     if (onUpdateLineCapacities) {
@@ -251,15 +252,67 @@ export default function PlanProgressTable({
 
   const getDemandCount = (line: AssemblyLine, day: DayProgress) => {
     if (autoSync) {
-      return getActualResignedCount(line, day.fullDate);
+      const iso = normalizeDateToISO(day.fullDate);
+      if (iso >= todayISO) {
+        const resigns = getActualResignedCount(line, day.fullDate);
+        const onboardings = getActualReceivedCount(line, day.fullDate);
+        return Math.max(resigns, onboardings);
+      }
     }
     return day.targets[line].demand ?? 0;
   };
 
   // Active dates for stats computations
-  const currentDaysList = isEditing ? tempProgress : dayProgress;
+  const baseDaysList = isEditing ? tempProgress : dayProgress;
 
-  const todayISO = getTodayISO();
+  const currentDaysList = React.useMemo(() => {
+    if (!autoSync) return baseDaysList;
+
+    const extraDatesSet = new Set<string>();
+    employees.forEach(emp => {
+      if (emp.resignDate && (emp.status === 'RESIGNED' || emp.status === 'LEAVE')) {
+        const iso = normalizeDateToISO(emp.resignDate);
+        if (iso && iso >= todayISO) extraDatesSet.add(iso);
+      }
+      if (emp.joinDate && (emp.status === 'WORKING' || emp.status === 'ONBOARDING')) {
+        const iso = normalizeDateToISO(emp.joinDate);
+        if (iso && iso >= todayISO) extraDatesSet.add(iso);
+      }
+    });
+
+    const existingDates = new Set<string>();
+    baseDaysList.forEach(day => {
+      const iso = normalizeDateToISO(day.fullDate);
+      if (iso) existingDates.add(iso);
+    });
+
+    const mergedList = [...baseDaysList];
+
+    // Filter to find sorted missing dates
+    const missingDates = Array.from(extraDatesSet)
+      .filter(iso => !existingDates.has(iso))
+      .sort((a, b) => a.localeCompare(b));
+
+    // For each missing date, map it to a DayProgress structure
+    missingDates.forEach(isoDate => {
+      const short = formatToShortDate(isoDate);
+      mergedList.push({
+        date: short,
+        fullDate: isoDate,
+        targets: {
+          DCLR: { in: 0, out: 0, demand: 0, reception: 0, actualIn: 0, actualOut: 0 },
+          'DC RMA BG': { in: 0, out: 0, demand: 0, reception: 0, actualIn: 0, actualOut: 0 }
+        }
+      });
+    });
+
+    // Sort chronologically
+    return mergedList.sort((a, b) => {
+      const d1 = normalizeDateToISO(a.fullDate);
+      const d2 = normalizeDateToISO(b.fullDate);
+      return d1.localeCompare(d2);
+    });
+  }, [baseDaysList, autoSync, employees, todayISO]);
 
   // --- STATS COMPUTING ---
   const lineDetails = {
@@ -419,55 +472,81 @@ export default function PlanProgressTable({
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-32">QUẢN LÝ T.N</th>
                 
                 {/* Columns representing days */}
-                {currentDaysList.map((day, dIdx) => (
-                  <th 
-                    key={`demand-header-${dIdx}`} 
-                    className={`py-3 px-1.5 border-r border-slate-200 text-center font-bold text-xs ${isEditing ? 'bg-amber-100/30 min-w-[145px]' : 'min-w-[70px]'}`}
-                  >
-                    {isEditing ? (
-                      <div className="flex flex-col items-center gap-1.5 p-1 rounded bg-amber-50 border border-amber-200">
-                        {/* Interactive Calendar Date Picker */}
-                        <div className="flex items-center gap-1 w-full bg-white px-1.5 py-0.5 border border-slate-200 rounded text-slate-800">
-                          <Calendar size={11} className="text-slate-400 shrink-0" />
-                          <input 
-                            type="date" 
-                            value={day.fullDate} 
-                            onChange={(e) => {
-                              const newFullDate = e.target.value;
-                              const newDateShort = formatToShortDate(newFullDate);
-                              const updated = [...tempProgress];
-                              updated[dIdx] = {
-                                ...updated[dIdx],
-                                fullDate: newFullDate,
-                                date: newDateShort
-                              };
-                              setTempProgress(updated);
-                            }}
-                            className="bg-transparent font-black text-[10px] w-full border-none focus:ring-0 focus:outline-none focus:border-none p-0 cursor-pointer text-center uppercase"
-                          />
+                {currentDaysList.map((day, dIdx) => {
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
+                  const isDynamic = autoSync && (matchedIdx === -1);
+                  
+                  return (
+                    <th 
+                      key={`demand-header-${dIdx}`} 
+                      className={`py-3 px-1.5 border-r border-slate-200 text-center font-bold text-xs ${isEditing ? 'bg-amber-100/30' : 'min-w-[70px]'}`}
+                      style={isEditing ? { minWidth: isDynamic ? '125px' : '155px' } : undefined}
+                    >
+                      {isEditing ? (
+                        isDynamic ? (
+                          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-rose-50 border border-rose-100/80">
+                            <span className="font-extrabold text-[12px] text-rose-800 leading-normal flex items-center gap-0.5 whitespace-nowrap">
+                              🔄 {day.date}
+                            </span>
+                            <span className="text-[8px] text-rose-500 font-bold block bg-white px-1.5 py-0.5 rounded border border-rose-100 shadow-3xs">
+                              {day.fullDate}
+                            </span>
+                            <span className="text-[8px] text-rose-600 font-semibold p-0.5 leading-tight text-center" title="Được tự động liên thông khi đi làm hoặc thôi việc ở Giai đoạn 1">
+                              Sự kiện liên thông
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1.5 p-1 rounded bg-amber-50 border border-amber-200">
+                            {/* Interactive Calendar Date Picker */}
+                            <div className="flex items-center gap-1 w-full bg-white px-1.5 py-0.5 border border-slate-200 rounded text-slate-800">
+                              <Calendar size={11} className="text-slate-400 shrink-0" />
+                              <input 
+                                type="date" 
+                                value={day.fullDate} 
+                                onChange={(e) => {
+                                  const newFullDate = e.target.value;
+                                  const newDateShort = formatToShortDate(newFullDate);
+                                  if (matchedIdx !== -1) {
+                                    const updated = [...tempProgress];
+                                    updated[matchedIdx] = {
+                                      ...updated[matchedIdx],
+                                      fullDate: newFullDate,
+                                      date: newDateShort
+                                    };
+                                    setTempProgress(updated);
+                                  }
+                                }}
+                                className="bg-transparent font-black text-[10px] w-full border-none focus:ring-0 focus:outline-none focus:border-none p-0 cursor-pointer text-center uppercase"
+                              />
+                            </div>
+                            {/* Display day-month label with visual feedback */}
+                            <span className="text-[9px] text-indigo-700 tracking-wider font-extrabold uppercase">
+                              ({day.date})
+                            </span>
+                            {/* Remove date column */}
+                            <button
+                              type="button"
+                              title="Xóa cột lịch này"
+                              onClick={() => {
+                                if (matchedIdx !== -1) {
+                                  handleDeleteDayColumn(matchedIdx);
+                                }
+                              }}
+                              className="flex items-center bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] gap-0.5 transition font-medium cursor-pointer"
+                            >
+                              <Trash2 size={9} /> Gỡ bỏ
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        <div className="flex flex-col items-center select-none py-1">
+                          <span className="text-slate-900 font-extrabold text-[13px] tracking-tight">{day.date}</span>
+                          <span className="text-[9px] mt-0.5 text-slate-400 font-medium block">{day.fullDate}</span>
                         </div>
-                        {/* Display day-month label with visual feedback */}
-                        <span className="text-[9px] text-indigo-700 tracking-wider font-extrabold uppercase">
-                          ({day.date})
-                        </span>
-                        {/* Remove date column */}
-                        <button
-                          type="button"
-                          title="Xóa cột lịch này"
-                          onClick={() => handleDeleteDayColumn(dIdx)}
-                          className="flex items-center bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] gap-0.5 transition font-medium cursor-pointer"
-                        >
-                          <Trash2 size={9} /> Gở bỏ
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center select-none py-1">
-                        <span className="text-slate-900 font-extrabold text-[13px] tracking-tight">{day.date}</span>
-                        <span className="text-[9px] mt-0.5 text-slate-400 font-medium block">{day.fullDate}</span>
-                      </div>
-                    )}
-                  </th>
-                ))}
+                      )}
+                    </th>
+                  );
+                })}
                 
                 <th className="py-3 px-4 text-center font-bold text-slate-900 w-24 bg-slate-100/80">TỔNG</th>
               </tr>
@@ -499,21 +578,30 @@ export default function PlanProgressTable({
                 </td>
                 
                 {currentDaysList.map((day, dIdx) => {
-                  const baseVal = autoSync
+                  const dayIso = normalizeDateToISO(day.fullDate);
+                  const isPast = dayIso < todayISO;
+                  const useAuto = autoSync && !isPast;
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
+
+                  const baseVal = useAuto
                     ? getActualResignedCount('DCLR', day.fullDate)
-                    : (isEditing 
-                        ? tempProgress[dIdx].targets['DCLR'].demand ?? 0 
+                    : (isEditing && matchedIdx !== -1
+                        ? tempProgress[matchedIdx].targets['DCLR'].demand ?? 0 
                         : day.targets['DCLR'].demand ?? 0);
                   const _unusedDclrVal = isEditing 
 
                   return (
                     <td key={`demand-dclr-cell-${dIdx}`} className="py-2 px-1 border-r border-slate-150 text-center">
-                      {isEditing && !autoSync ? (
+                      {isEditing && !useAuto ? (
                         <input 
                           type="number" 
                           value={baseVal || ''} 
                           placeholder="0"
-                          onChange={(e) => handleCellChange(dIdx, 'DCLR', 'demand', e.target.value)}
+                          onChange={(e) => {
+                            if (matchedIdx !== -1) {
+                              handleCellChange(matchedIdx, 'DCLR', 'demand', e.target.value);
+                            }
+                          }}
                           className="w-16 text-center font-black text-slate-900 bg-amber-50 rounded border border-amber-300 py-1 shadow-xs focus:ring-1 focus:ring-amber-400 focus:outline-none text-xs"
                         />
                       ) : (
@@ -521,7 +609,7 @@ export default function PlanProgressTable({
                           <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
                             {baseVal || '-'}
                           </span>
-                          {autoSync && baseVal > 0 && (
+                          {useAuto && baseVal > 0 && (
                             <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 flex items-center justify-center gap-0.5 mt-0.5 whitespace-nowrap scale-90" title="Tự động tính theo NS thôi việc">
                               🔄 Tự động
                             </span>
@@ -563,21 +651,30 @@ export default function PlanProgressTable({
                 </td>
                 
                 {currentDaysList.map((day, dIdx) => {
-                  const baseVal = autoSync
+                  const dayIso = normalizeDateToISO(day.fullDate);
+                  const isPast = dayIso < todayISO;
+                  const useAuto = autoSync && !isPast;
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
+
+                  const baseVal = useAuto
                     ? getActualResignedCount('DC RMA BG', day.fullDate)
-                    : (isEditing 
-                        ? tempProgress[dIdx].targets['DC RMA BG'].demand ?? 0 
+                    : (isEditing && matchedIdx !== -1
+                        ? tempProgress[matchedIdx].targets['DC RMA BG'].demand ?? 0 
                         : day.targets['DC RMA BG'].demand ?? 0);
                   const _unusedRmaVal = isEditing 
 
                   return (
                     <td key={`demand-rma-cell-${dIdx}`} className="py-2 px-1 border-r border-slate-150 text-center">
-                      {isEditing && !autoSync ? (
+                      {isEditing && !useAuto ? (
                         <input 
                           type="number" 
                           value={baseVal || ''} 
                           placeholder="0"
-                          onChange={(e) => handleCellChange(dIdx, 'DC RMA BG', 'demand', e.target.value)}
+                          onChange={(e) => {
+                            if (matchedIdx !== -1) {
+                              handleCellChange(matchedIdx, 'DC RMA BG', 'demand', e.target.value);
+                            }
+                          }}
                           className="w-16 text-center font-black text-slate-900 bg-amber-50 rounded border border-amber-300 py-1 shadow-xs focus:ring-1 focus:ring-amber-400 focus:outline-none text-xs"
                         />
                       ) : (
@@ -585,7 +682,7 @@ export default function PlanProgressTable({
                           <span className={`font-bold text-[15px] ${baseVal > 0 ? 'text-slate-800 font-black' : 'text-slate-330'}`}>
                             {baseVal || '-'}
                           </span>
-                          {autoSync && baseVal > 0 && (
+                          {useAuto && baseVal > 0 && (
                             <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 border border-rose-100 rounded px-1 flex items-center justify-center gap-0.5 mt-0.5 whitespace-nowrap scale-90" title="Tự động tính theo NS thôi việc">
                               🔄 Tự động
                             </span>
@@ -751,13 +848,14 @@ export default function PlanProgressTable({
                 
                 {currentDaysList.map((day, dIdx) => {
                   const planVal = getDemandCount('DCLR', day);
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   
-                  const actIn = isEditing
-                    ? (tempProgress[dIdx].targets['DCLR'].actualIn ?? 0)
+                  const actIn = isEditing && matchedIdx !== -1
+                    ? (tempProgress[matchedIdx].targets['DCLR'].actualIn ?? 0)
                     : getReceivedCount('DCLR', day);
 
-                  const actOut = isEditing
-                    ? (tempProgress[dIdx].targets['DCLR'].actualOut ?? 0)
+                  const actOut = isEditing && matchedIdx !== -1
+                    ? (tempProgress[matchedIdx].targets['DCLR'].actualOut ?? 0)
                     : getResignedCount('DCLR', day);
 
                   return (
@@ -779,7 +877,11 @@ export default function PlanProgressTable({
                               value={actIn || ''} 
                               placeholder="0"
                               disabled={autoSync}
-                              onChange={(e) => handleCellChange(dIdx, 'DCLR', 'actualIn', e.target.value)}
+                              onChange={(e) => {
+                                if (matchedIdx !== -1) {
+                                  handleCellChange(matchedIdx, 'DCLR', 'actualIn', e.target.value);
+                                }
+                              }}
                               className={`w-11 text-center font-black rounded border py-0.5 text-[11px] focus:outline-none ${autoSync ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-emerald-900 border-amber-300 focus:ring-1 focus:ring-amber-400'}`}
                             />
                           </div>
@@ -791,7 +893,11 @@ export default function PlanProgressTable({
                               value={actOut || ''} 
                               placeholder="0"
                               disabled={autoSync}
-                              onChange={(e) => handleCellChange(dIdx, 'DCLR', 'actualOut', e.target.value)}
+                              onChange={(e) => {
+                                if (matchedIdx !== -1) {
+                                  handleCellChange(matchedIdx, 'DCLR', 'actualOut', e.target.value);
+                                }
+                              }}
                               className={`w-11 text-center font-black rounded border py-0.5 text-[11px] focus:outline-none ${autoSync ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-rose-900 border-amber-300 focus:ring-1 focus:ring-amber-400'}`}
                             />
                           </div>
@@ -870,13 +976,14 @@ export default function PlanProgressTable({
                 
                 {currentDaysList.map((day, dIdx) => {
                   const planVal = getDemandCount('DC RMA BG', day);
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   
-                  const actIn = isEditing
-                    ? (tempProgress[dIdx].targets['DC RMA BG'].actualIn ?? 0)
+                  const actIn = isEditing && matchedIdx !== -1
+                    ? (tempProgress[matchedIdx].targets['DC RMA BG'].actualIn ?? 0)
                     : getReceivedCount('DC RMA BG', day);
 
-                  const actOut = isEditing
-                    ? (tempProgress[dIdx].targets['DC RMA BG'].actualOut ?? 0)
+                  const actOut = isEditing && matchedIdx !== -1
+                    ? (tempProgress[matchedIdx].targets['DC RMA BG'].actualOut ?? 0)
                     : getResignedCount('DC RMA BG', day);
 
                   return (
@@ -898,7 +1005,11 @@ export default function PlanProgressTable({
                               value={actIn || ''} 
                               placeholder="0"
                               disabled={autoSync}
-                              onChange={(e) => handleCellChange(dIdx, 'DC RMA BG', 'actualIn', e.target.value)}
+                              onChange={(e) => {
+                                if (matchedIdx !== -1) {
+                                  handleCellChange(matchedIdx, 'DC RMA BG', 'actualIn', e.target.value);
+                                }
+                              }}
                               className={`w-11 text-center font-black rounded border py-0.5 text-[11px] focus:outline-none ${autoSync ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-emerald-950 border-amber-300 focus:ring-1 focus:ring-amber-400'}`}
                             />
                           </div>
@@ -910,7 +1021,11 @@ export default function PlanProgressTable({
                               value={actOut || ''} 
                               placeholder="0"
                               disabled={autoSync}
-                              onChange={(e) => handleCellChange(dIdx, 'DC RMA BG', 'actualOut', e.target.value)}
+                              onChange={(e) => {
+                                if (matchedIdx !== -1) {
+                                  handleCellChange(matchedIdx, 'DC RMA BG', 'actualOut', e.target.value);
+                                }
+                              }}
                               className={`w-11 text-center font-black rounded border py-0.5 text-[11px] focus:outline-none ${autoSync ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-rose-950 border-amber-300 focus:ring-1 focus:ring-amber-400'}`}
                             />
                           </div>

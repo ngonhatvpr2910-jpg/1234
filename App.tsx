@@ -10,6 +10,7 @@ import StatsSection from './StatsSection';
 import PlanProgressTable from './PlanProgressTable';
 import EmployeeTable from './EmployeeTable';
 import EmployeeModal from './EmployeeModal';
+import EmployeeCardModal from './EmployeeCardModal';
 import AnalyticsSection from './AnalyticsSection';
 import { ClipboardList, BarChart3, Users, Settings, Briefcase, Sparkles, RefreshCw, Layers, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -135,6 +136,15 @@ export default function App() {
 
   // Custom delete confirmation modal state
   const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
+
+  // Employee ID Card generation modal states
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [cardEmployee, setCardEmployee] = useState<Employee | null>(null);
+
+  const handleOpenCardModal = (employee: Employee | null) => {
+    setCardEmployee(employee);
+    setIsCardModalOpen(true);
+  };
 
   // --- EMPLOYEE OPERATION HANDLERS ---
   const handleAddEmployeeClick = () => {
@@ -427,6 +437,7 @@ export default function App() {
                   onUpdateJoinDate={handleUpdateJoinDate}
                   onUpdateLine={handleUpdateLine}
                   onUpdateField={handleUpdateField}
+                  onPrintCardClick={handleOpenCardModal}
                 />
               </motion.div>
             )}
@@ -472,6 +483,19 @@ export default function App() {
 
 
       {/* CENTRALIZED MODAL ENGINE */}
+      <EmployeeCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        employee={cardEmployee}
+        allEmployees={employees}
+        onUpdateEmployee={(updatedEmp) => {
+          const updated = employees.map(e => e.id === updatedEmp.id ? updatedEmp : e);
+          saveEmployeesToStorage(updated);
+          if (cardEmployee && cardEmployee.id === updatedEmp.id) {
+            setCardEmployee(updatedEmp);
+          }
+        }}
+      />
       <EmployeeModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

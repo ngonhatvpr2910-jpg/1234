@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, AssemblyLine, EmployeeStatus } from './types';
-import { Search, UserPlus, FileSpreadsheet, Edit3, Trash2, UserMinus, Settings, MapPin, Calendar, HelpCircle, Filter, Check, AlertTriangle } from 'lucide-react';
+import { Search, UserPlus, FileSpreadsheet, Edit3, Trash2, UserMinus, Settings, MapPin, Calendar, HelpCircle, Filter, Check, AlertTriangle, Printer, Contact } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ExcelImporter from './ExcelImporter';
 
@@ -14,6 +14,7 @@ interface EmployeeTableProps {
   onUpdateJoinDate?: (id: string, newDate: string) => void;
   onUpdateLine?: (id: string, newLine: AssemblyLine) => void;
   onUpdateField?: (id: string, field: keyof Employee, value: any) => void;
+  onPrintCardClick?: (employee: Employee | null) => void;
 }
 
 // Helper to parse manually inputted date formats and return standard YYYY-MM-DD
@@ -102,7 +103,8 @@ export default function EmployeeTable({
   onImportEmployees,
   onUpdateJoinDate,
   onUpdateLine,
-  onUpdateField
+  onUpdateField,
+  onPrintCardClick
 }: EmployeeTableProps) {
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -359,6 +361,17 @@ export default function EmployeeTable({
             >
               <UserPlus size={16} />
               <span>Thêm Nhân Sự Mới</span>
+            </button>
+
+            {/* Bulk Badge Printing Button */}
+            <button
+              type="button"
+              onClick={() => onPrintCardClick && onPrintCardClick(null)}
+              id="btn-bulk-badge-print"
+              className="flex-1 lg:flex-initial flex items-center justify-center gap-2 bg-[#EC1B24] hover:bg-[#c1151c] text-white px-4.5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow transition-all cursor-pointer"
+            >
+              <Printer size={16} />
+              <span>In Thẻ Hàng Loạt</span>
             </button>
 
             {/* Export CSV Button (Secondary) */}
@@ -793,6 +806,15 @@ export default function EmployeeTable({
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                         >
                           <Edit3 size={15} />
+                        </button>
+
+                        {/* Print ID Card Button */}
+                        <button
+                          onClick={() => onPrintCardClick && onPrintCardClick(emp)}
+                          title="In thẻ nhân viên Sunhouse"
+                          className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                        >
+                          <Printer size={15} />
                         </button>
 
                         {/* Delete button */}

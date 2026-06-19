@@ -1,7 +1,7 @@
-import { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import { Employee, AssemblyLine, EmployeeStatus } from './types';
 import { RESIGNATION_REASONS, MANAGERS } from './mockData';
-import { X, Save, AlertOctagon, Calendar, Briefcase, User, Phone, CheckCircle } from 'lucide-react';
+import { X, Save, AlertOctagon, Calendar, Briefcase, User, Phone, CheckCircle, Camera, Upload } from 'lucide-react';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -62,6 +62,42 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
   const [notes, setNotes] = useState('');
   const [birthday, setBirthday] = useState('');
   const [birthplace, setBirthplace] = useState('');
+  const [avatar, setAvatar] = useState<string | undefined>(undefined);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // File loading helpers
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Resignation states
   const [resignDate, setResignDate] = useState('2026-06-15');
@@ -100,6 +136,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         setNotes(employee.notes || '');
         setBirthday(employee.birthday || '');
         setBirthplace(employee.birthplace || '');
+        setAvatar(employee.avatar);
         
         if (employee.resignDate) {
           setResignDate(employee.resignDate);
@@ -135,6 +172,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         setNotes('');
         setBirthday('');
         setBirthplace('');
+        setAvatar(undefined);
         setResignDate('2026-06-15');
         setSelectedReasonOption(RESIGNATION_REASONS[0]);
         setCustomReason('');
@@ -203,6 +241,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         notes,
         birthday,
         birthplace,
+        avatar,
         ...((status === 'RESIGNED' || status === 'LEAVE') ? { resignDate, resignReason: finalReason } : { resignDate: undefined, resignReason: undefined })
       });
     }
@@ -326,35 +365,99 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
           ) : (
             // ADD / EDIT FORM MODE
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* ID Code */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Mã Nhân Viên <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    className="w-full text-sm font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    placeholder="DCLR-123"
-                  />
-                  {errors.code && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.code}</p>}
+              {/* Photo & Row Identifiers */}
+              <div className="flex flex-col sm:flex-row gap-4 items-start bg-slate-50/55 p-3.5 rounded-2xl border border-slate-100/70">
+                {/* 3x4 Photo Upload */}
+                <div className="w-full sm:w-28 flex-shrink-0 flex flex-col items-center">
+                  <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 self-start sm:self-center">
+                    Ảnh thẻ 3x4
+                  </span>
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById('avatar-input')?.click()}
+                    className={`relative w-24 h-32 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all select-none ${
+                      avatar
+                        ? 'border-blue-300 hover:border-blue-450'
+                        : isDragging
+                        ? 'border-blue-500 bg-blue-50/50 scale-102 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-350'
+                    }`}
+                  >
+                    {avatar ? (
+                      <>
+                        <img
+                          src={avatar}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white text-[9px] font-bold p-1 text-center">
+                          <Camera size={13} className="mb-0.5" />
+                          Thay đổi ảnh
+                        </div>
+                        {/* Clear photo button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAvatar(undefined);
+                          }}
+                          className="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white p-0.5 rounded-full shadow-xs leading-none cursor-pointer"
+                          title="Xóa ảnh"
+                        >
+                          <X size={10} />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center p-1 text-slate-400">
+                        <Camera size={18} className="mb-1 text-slate-350" />
+                        <span className="text-[9px] font-extrabold leading-tight">Thêm ảnh</span>
+                        <span className="text-[7px] text-slate-450 mt-0.5">Kéo thả / Chọn</span>
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      id="avatar-input"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
                 </div>
 
-                {/* Full Name */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Họ và Tên <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    placeholder="Nguyễn Văn A"
-                  />
-                  {errors.fullName && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.fullName}</p>}
+                {/* Name + Code Grid */}
+                <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* ID Code */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Mã Nhân Viên <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      className="w-full text-sm font-bold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      placeholder="DCLR-123"
+                    />
+                    {errors.code && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.code}</p>}
+                  </div>
+
+                  {/* Full Name */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Hộ và Tên <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      placeholder="Nguyễn Văn A"
+                    />
+                    {errors.fullName && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.fullName}</p>}
+                  </div>
                 </div>
               </div>
 

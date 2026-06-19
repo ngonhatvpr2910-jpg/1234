@@ -35,6 +35,7 @@ export interface Employee {
   contract2Legal?: string; // Quá trình HD thứ 2 - Pháp nhân
   contract2Start?: string; // Quá trình HD thứ 2 - Ngày bắt đầu
   contract2End?: string;   // Quá trình HD thứ 2 - Ngày kết thúc
+  avatar?: string;         // Base64 profile picture string for ID cards
 }
 
 export interface DailyTargets {
