@@ -115,6 +115,28 @@ export default function EmployeeTable({
   const [yearFilter, setYearFilter] = useState<string>('ALL');
   const [restoreConfirmationEmp, setRestoreConfirmationEmp] = useState<Employee | null>(null);
   
+  // Column visibility configuration state
+  const [isColMenuOpen, setIsColMenuOpen] = useState(false);
+  const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('dclr_employee_table_cols');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      code: true,
+      gender: true,
+      birthday: true,
+      phone: true,
+      line: true,
+      joinDate: true,
+      status: true,
+      resignDetails: true,
+    };
+  });
+
+  // Dynamic visible columns count for proper colSpan on empty table states
+  const visibleColsCount = 3 + Object.values(visibleCols).filter(Boolean).length;
+  
   // Sorting state
   const [sortField, setSortField] = useState<'code' | 'fullName' | 'joinDate' | 'status'>('joinDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -393,6 +415,84 @@ export default function EmployeeTable({
               <FileSpreadsheet size={16} className={isImporterOpen ? 'text-emerald-700' : 'text-slate-400'} />
               <span>{isImporterOpen ? 'Đóng Bảng Nhập Excel' : 'Hòa Nhập File Excel Cũ'}</span>
             </button>
+
+            {/* Column Visibility Configuration Dropdown */}
+            <div className="relative inline-block text-left" id="col-toggle-dropdown-container">
+              <button
+                type="button"
+                onClick={() => setIsColMenuOpen(!isColMenuOpen)}
+                id="btn-toggle-columns"
+                className={`w-full flex items-center justify-center gap-2 px-4.5 py-2.5 rounded-xl text-sm font-semibold transition border bg-white hover:bg-slate-50 text-slate-700 border-slate-200 cursor-pointer shadow-3xs ${isColMenuOpen ? 'border-indigo-300 ring-2 ring-indigo-50/50' : ''}`}
+                title="Ẩn hoặc hiện các cột trong bảng danh sách nhân sự"
+              >
+                <Settings size={16} className={`text-indigo-600 ${isColMenuOpen ? 'animate-spin' : ''}`} />
+                <span>Ẩn/Hiện Cột</span>
+              </button>
+
+              {isColMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsColMenuOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white shadow-xl border border-slate-150 ring-1 ring-black/5 focus:outline-none z-50 overflow-hidden font-sans normal-case text-xs text-slate-700">
+                    <div className="px-4 py-3 bg-slate-50 font-bold text-slate-605 border-b border-slate-100 text-[11px] uppercase tracking-wider flex items-center justify-between">
+                      <span>Cấu hình cột hiển thị</span>
+                      <button 
+                        onClick={() => {
+                          const allTrue = {
+                            code: true,
+                            gender: true,
+                            birthday: true,
+                            phone: true,
+                            line: true,
+                            joinDate: true,
+                            status: true,
+                            resignDetails: true
+                          };
+                          setVisibleCols(allTrue);
+                          try { localStorage.setItem('dclr_employee_table_cols', JSON.stringify(allTrue)); } catch(_) {}
+                        }}
+                        className="text-[10px] text-blue-650 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                      >
+                        Khôi phục
+                      </button>
+                    </div>
+                    <div className="p-3 space-y-1 max-h-80 overflow-y-auto">
+                      {[
+                        { key: 'code', label: 'Mã Nhân Viên' },
+                        { key: 'gender', label: 'Phái / Giới tính' },
+                        { key: 'birthday', label: 'Ngày thôi nôi / Ngày sinh' },
+                        { key: 'phone', label: 'Số điện thoại liên lạc' },
+                        { key: 'line', label: 'Dây chuyền làm việc' },
+                        { key: 'joinDate', label: 'Ngày nhận việc / Thử việc' },
+                        { key: 'status', label: 'Trạng thái hoạt động' },
+                        { key: 'resignDetails', label: 'Chi tiết thôi việc / Nghỉ phép' }
+                      ].map((col) => {
+                        const isChecked = visibleCols[col.key];
+                        return (
+                          <label 
+                            key={`col-check-${col.key}`}
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 cursor-pointer transition select-none text-xs font-semibold text-slate-700 hover:text-slate-900"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const updated = { ...visibleCols, [col.key]: !isChecked };
+                                setVisibleCols(updated);
+                                try {
+                                  localStorage.setItem('dclr_employee_table_cols', JSON.stringify(updated));
+                                } catch (_) {}
+                              }}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span>{col.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -492,113 +592,129 @@ export default function EmployeeTable({
           <thead>
             <tr className="bg-slate-100/70 border-b border-slate-100 text-slate-600 font-semibold uppercase text-[10px] tracking-wider">
               <th className="py-3 px-4 w-12 text-center">STT</th>
-              <th className="py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('code')}>
-                Mã NV {sortField === 'code' && (sortOrder === 'asc' ? '▲' : '▼')}
-              </th>
+              {visibleCols.code && (
+                <th className="py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('code')}>
+                  Mã NV {sortField === 'code' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+              )}
               <th className="py-3 px-4 cursor-pointer select-none min-w-[200px]" onClick={() => handleSort('fullName')}>
                 Họ và Tên {sortField === 'fullName' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th className="py-3 px-3 text-center">Phái</th>
-              <th className="py-3 px-4 text-center min-w-[100px]">Ngày sinh</th>
-              <th className="py-3 px-4">Điện thoại</th>
-              <th className="py-3 px-4">Dây chuyền</th>
-              <th className="py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('joinDate')}>
-                Ngày nhận việc {sortField === 'joinDate' && (sortOrder === 'asc' ? '▲' : '▼')}
-              </th>
-              <th className="py-3 px-4 relative select-none text-[10px] uppercase font-bold tracking-wider text-slate-600">
-                <div className="flex items-center justify-between gap-1.5">
-                  <span 
-                    className="cursor-pointer hover:text-slate-900 transition flex items-center gap-1"
-                    onClick={() => handleSort('status')}
-                    title="Sắp xếp trạng thái"
-                  >
-                    Trạng thái {sortField === 'status' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                  </span>
-                  
-                  {/* Floating Filter trigger button inside the column header */}
-                  <div className="relative inline-block text-left" id="status-header-filter">
-                    <button
-                      type="button"
-                      onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
-                      className={`p-1 rounded-md hover:bg-slate-200 transition-colors ${statusFilter !== 'ALL' ? 'text-indigo-600 bg-indigo-50 font-extrabold border border-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}
-                      title="Lọc nhanh trạng thái"
+              {visibleCols.gender && (
+                <th className="py-3 px-3 text-center">Phái</th>
+              )}
+              {visibleCols.birthday && (
+                <th className="py-3 px-4 text-center min-w-[100px]">Ngày sinh</th>
+              )}
+              {visibleCols.phone && (
+                <th className="py-3 px-4">Điện thoại</th>
+              )}
+              {visibleCols.line && (
+                <th className="py-3 px-4">Dây chuyền</th>
+              )}
+              {visibleCols.joinDate && (
+                <th className="py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('joinDate')}>
+                  Ngày nhận việc {sortField === 'joinDate' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+              )}
+              {visibleCols.status && (
+                <th className="py-3 px-4 relative select-none text-[10px] uppercase font-bold tracking-wider text-slate-600">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span 
+                      className="cursor-pointer hover:text-slate-900 transition flex items-center gap-1"
+                      onClick={() => handleSort('status')}
+                      title="Sắp xếp trạng thái"
                     >
-                      <Filter size={11} />
-                    </button>
+                      Trạng thái {sortField === 'status' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    </span>
+                    
+                    {/* Floating Filter trigger button inside the column header */}
+                    <div className="relative inline-block text-left" id="status-header-filter">
+                      <button
+                        type="button"
+                        onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
+                        className={`p-1 rounded-md hover:bg-slate-200 transition-colors ${statusFilter !== 'ALL' ? 'text-indigo-600 bg-indigo-50 font-extrabold border border-indigo-200' : 'text-slate-400 hover:text-slate-600'}`}
+                        title="Lọc nhanh trạng thái"
+                      >
+                        <Filter size={11} />
+                      </button>
 
-                    {isStatusMenuOpen && (
-                      <>
-                        {/* Overlay backdrop to close the menu on clicking outside */}
-                        <div className="fixed inset-0 z-40" onClick={() => setIsStatusMenuOpen(false)}></div>
-                        
-                        {/* Status options dropdown list */}
-                        <div className="absolute right-0 mt-2 w-52 rounded-xl bg-white shadow-xl border border-slate-100 ring-1 ring-black/5 focus:outline-none z-50 overflow-hidden font-sans normal-case text-xs text-slate-700">
-                          <div className="px-3 py-2 bg-slate-50 font-bold text-slate-500 border-b border-slate-100 text-[10px] uppercase tracking-wider">
-                            Lọc nhanh trạng thái
+                      {isStatusMenuOpen && (
+                        <>
+                          {/* Overlay backdrop to close the menu on clicking outside */}
+                          <div className="fixed inset-0 z-40" onClick={() => setIsStatusMenuOpen(false)}></div>
+                          
+                          {/* Status options dropdown list */}
+                          <div className="absolute right-0 mt-2 w-52 rounded-xl bg-white shadow-xl border border-slate-100 ring-1 ring-black/5 focus:outline-none z-50 overflow-hidden font-sans normal-case text-xs text-slate-700">
+                            <div className="px-3 py-2 bg-slate-50 font-bold text-slate-500 border-b border-slate-100 text-[10px] uppercase tracking-wider">
+                              Lọc nhanh trạng thái
+                            </div>
+                            <div className="p-1 space-y-0.5">
+                              <button
+                                onClick={() => { setStatusFilter('ALL'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'ALL' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span>Tất cả trạng thái</span>
+                                {statusFilter === 'ALL' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                              <button
+                                onClick={() => { setStatusFilter('WORKING'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'WORKING' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                  Đang làm việc
+                                </span>
+                                {statusFilter === 'WORKING' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                              <button
+                                onClick={() => { setStatusFilter('ONBOARDING'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'ONBOARDING' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                                  Chờ nhận việc
+                                </span>
+                                {statusFilter === 'ONBOARDING' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                              <button
+                                onClick={() => { setStatusFilter('NEW_HIRE'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'NEW_HIRE' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+                                  Nhận việc mới
+                                </span>
+                                {statusFilter === 'NEW_HIRE' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                              <button
+                                onClick={() => { setStatusFilter('RESIGNED'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'RESIGNED' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                                  Đã nghỉ việc
+                                </span>
+                                {statusFilter === 'RESIGNED' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                            </div>
                           </div>
-                          <div className="p-1 space-y-0.5">
-                            <button
-                              onClick={() => { setStatusFilter('ALL'); setIsStatusMenuOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'ALL' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            >
-                              <span>Tất cả trạng thái</span>
-                              {statusFilter === 'ALL' && <Check size={13} className="text-indigo-600" />}
-                            </button>
-                            <button
-                              onClick={() => { setStatusFilter('WORKING'); setIsStatusMenuOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'WORKING' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                                Đang làm việc
-                              </span>
-                              {statusFilter === 'WORKING' && <Check size={13} className="text-indigo-600" />}
-                            </button>
-                            <button
-                              onClick={() => { setStatusFilter('ONBOARDING'); setIsStatusMenuOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'ONBOARDING' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                                Chờ nhận việc
-                              </span>
-                              {statusFilter === 'ONBOARDING' && <Check size={13} className="text-indigo-600" />}
-                            </button>
-                            <button
-                              onClick={() => { setStatusFilter('NEW_HIRE'); setIsStatusMenuOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'NEW_HIRE' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
-                                Nhận việc mới
-                              </span>
-                              {statusFilter === 'NEW_HIRE' && <Check size={13} className="text-indigo-600" />}
-                            </button>
-                            <button
-                              onClick={() => { setStatusFilter('RESIGNED'); setIsStatusMenuOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'RESIGNED' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                                Đã nghỉ việc
-                              </span>
-                              {statusFilter === 'RESIGNED' && <Check size={13} className="text-indigo-600" />}
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </th>
-              <th className="py-3 px-5 text-slate-700 bg-rose-50/20 font-bold min-w-[200px]">Chi tiết Nghỉ việc (Nếu có)</th>
+                </th>
+              )}
+              {visibleCols.resignDetails && (
+                <th className="py-3 px-5 text-slate-705 bg-rose-50/20 font-bold min-w-[200px]">Chi tiết Nghỉ việc (Nếu có)</th>
+              )}
               <th className="py-3 px-4 text-center">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {employees.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-16 text-center">
+                <td colSpan={visibleColsCount} className="py-16 text-center">
                   <div className="max-w-md mx-auto flex flex-col items-center p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
                     <div className="p-4 bg-emerald-50 text-emerald-600 rounded-full mb-3 border border-emerald-100">
                       <FileSpreadsheet size={36} />
@@ -609,7 +725,7 @@ export default function EmployeeTable({
                     </p>
                     <button
                       onClick={() => setIsImporterOpen(true)}
-                      className="mt-4 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="mt-4 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                     >
                       <FileSpreadsheet size={14} />
                       <span>Nhập file Excel ngay</span>
@@ -619,7 +735,7 @@ export default function EmployeeTable({
               </tr>
             ) : sortedEmployees.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-12 text-center">
+                <td colSpan={visibleColsCount} className="py-12 text-center">
                   <div className="max-w-md mx-auto flex flex-col items-center">
                     <div className="p-4 bg-slate-50 text-slate-400 rounded-full mb-3">
                       <Search size={32} />
@@ -643,9 +759,11 @@ export default function EmployeeTable({
                     </td>
 
                     {/* Member Code */}
-                    <td className="py-3 px-4 font-mono font-bold text-slate-700 text-xs text-center">
-                      {emp.code}
-                    </td>
+                    {visibleCols.code && (
+                      <td className="py-3 px-4 font-mono font-bold text-slate-700 text-xs text-center">
+                        {emp.code}
+                      </td>
+                    )}
 
                     {/* Name */}
                     <td className="py-3 px-4 min-w-[200px]">
@@ -663,105 +781,119 @@ export default function EmployeeTable({
                     </td>
 
                     {/* Gender */}
-                    <td className="py-3 px-3 text-slate-600 text-xs text-center font-medium">
-                      {emp.gender}
-                    </td>
+                    {visibleCols.gender && (
+                      <td className="py-3 px-3 text-slate-600 text-xs text-center font-medium">
+                        {emp.gender}
+                      </td>
+                    )}
 
                     {/* Birthday */}
-                    <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap min-w-[100px]">
-                      {emp.birthday || '-'}
-                    </td>
+                    {visibleCols.birthday && (
+                      <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap min-w-[100px]">
+                        {emp.birthday || '-'}
+                      </td>
+                    )}
 
                     {/* Phone */}
-                    <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap">
-                      {emp.phone || '-'}
-                    </td>
+                    {visibleCols.phone && (
+                      <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap">
+                        {emp.phone || '-'}
+                      </td>
+                    )}
 
                     {/* Line */}
-                    <td className="py-2.5 px-4 min-w-[140px]">
-                      <div className="flex flex-col gap-1 items-start">
-                        <InlineLineSelector employeeId={emp.id} initialValue={emp.line} onSave={onUpdateLine} />
-                        <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap">QL: {emp.manager}</div>
-                      </div>
-                    </td>
+                    {visibleCols.line && (
+                      <td className="py-2.5 px-4 min-w-[140px]">
+                        <div className="flex flex-col gap-1 items-start">
+                          <InlineLineSelector employeeId={emp.id} initialValue={emp.line} onSave={onUpdateLine} />
+                          <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap">QL: {emp.manager}</div>
+                        </div>
+                      </td>
+                    )}
 
                     {/* Onboarding Date */}
-                    <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap">
-                      {emp.joinDate ? emp.joinDate.split('-').reverse().join('/') : '-'}
-                    </td>
+                    {visibleCols.joinDate && (
+                      <td className="py-3 px-4 text-slate-600 font-mono text-xs text-center whitespace-nowrap">
+                        {emp.joinDate ? emp.joinDate.split('-').reverse().join('/') : '-'}
+                      </td>
+                    )}
 
                     {/* Status Badge */}
-                    <td className="py-3.5 px-4">
-                      {isWorking && (
-                        <div className="flex flex-col gap-1 items-start">
-                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                            Đang làm việc
-                          </span>
-                          {isNewHire(emp.joinDate) && (
-                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200 uppercase tracking-wide">
-                              Nhận việc mới
+                    {visibleCols.status && (
+                      <td className="py-3.5 px-4">
+                        {isWorking && (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                              Đang làm việc
                             </span>
-                          )}
-                        </div>
-                      )}
-                      {isResigned && (
-                        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200">
-                          <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                          Thôi việc (Nghỉ hẳn)
-                        </span>
-                      )}
-                      {emp.status === 'LEAVE' && (
-                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                          <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-gentle"></span>
-                          Nghỉ phép / Tạm nghỉ
-                        </span>
-                      )}
-                      {isOnboarding && (
-                        <div className="flex flex-col gap-1 items-start">
-                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 animate-pulse-gentle">
-                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                            Chờ nhận việc
+                            {isNewHire(emp.joinDate) && (
+                              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200 uppercase tracking-wide">
+                                Nhận việc mới
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {isResigned && (
+                          <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                            <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                            Thôi việc (Nghỉ hẳn)
                           </span>
-                          {isNewHire(emp.joinDate) && (
-                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200 uppercase tracking-wide">
-                              Nhận việc mới
+                        )}
+                        {emp.status === 'LEAVE' && (
+                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-gentle"></span>
+                            Nghỉ phép / Tạm nghỉ
+                          </span>
+                        )}
+                        {isOnboarding && (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200 animate-pulse-gentle">
+                              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                              Chờ nhận việc
                             </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
+                            {isNewHire(emp.joinDate) && (
+                              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200 uppercase tracking-wide">
+                                Nhận việc mới
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
 
                     {/* Resignation Details Columns */}
-                    <td className={`py-4 px-5 text-xs border-l border-slate-100 ${isResigned ? 'bg-rose-50/10' : emp.status === 'LEAVE' ? 'bg-amber-50/10' : ''}`}>
-                      {isResigned ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-slate-600 font-medium">
-                            <Calendar size={12} className="text-slate-400" />
-                            Ngày thôi việc: <span className="font-bold text-rose-700">{emp.resignDate}</span>
-                          </div>
-                          {emp.resignReason && (
-                            <div className="text-rose-600 bg-rose-50/50 p-1 rounded font-semibold border-l-2 border-rose-400 max-w-sm whitespace-normal leading-relaxed text-[11px]">
-                              {emp.resignReason}
+                    {visibleCols.resignDetails && (
+                      <td className={`py-4 px-5 text-xs border-l border-slate-100 ${isResigned ? 'bg-rose-50/10' : emp.status === 'LEAVE' ? 'bg-amber-50/10' : ''}`}>
+                        {isResigned ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1 text-slate-600 font-medium">
+                              <Calendar size={12} className="text-slate-400" />
+                              Ngày thôi việc: <span className="font-bold text-rose-700">{emp.resignDate}</span>
                             </div>
-                          )}
-                        </div>
-                      ) : emp.status === 'LEAVE' ? (
-                        <div className="space-y-1 overflow-hidden">
-                          <div className="flex items-center gap-1 text-slate-600 font-medium">
-                            <Calendar size={12} className="text-slate-400" />
-                            Nghỉ từ ngày: <span className="font-bold text-amber-700">{emp.resignDate}</span>
+                            {emp.resignReason && (
+                              <div className="text-rose-600 bg-rose-50/50 p-1 rounded font-semibold border-l-2 border-rose-400 max-w-sm whitespace-normal leading-relaxed text-[11px]">
+                                {emp.resignReason}
+                              </div>
+                            )}
                           </div>
-                          {emp.resignReason && (
-                            <div className="text-amber-800 bg-amber-50/50 p-1 rounded font-semibold border-l-2 border-amber-400 max-w-sm whitespace-normal leading-relaxed text-[11px]">
-                              {emp.resignReason}
+                        ) : emp.status === 'LEAVE' ? (
+                          <div className="space-y-1 overflow-hidden">
+                            <div className="flex items-center gap-1 text-slate-600 font-medium">
+                              <Calendar size={12} className="text-slate-400" />
+                              Nghỉ từ ngày: <span className="font-bold text-amber-700">{emp.resignDate}</span>
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-300 italic text-[11px]">- Đang hoạt động -</span>
-                      )}
-                    </td>
+                            {emp.resignReason && (
+                              <div className="text-amber-800 bg-amber-50/50 p-1 rounded font-semibold border-l-2 border-amber-400 max-w-sm whitespace-normal leading-relaxed text-[11px]">
+                                {emp.resignReason}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 italic text-[11px]">- Đang hoạt động -</span>
+                        )}
+                      </td>
+                    )}
 
                     {/* Action buttons */}
                     <td className="py-3.5 px-4 text-center">

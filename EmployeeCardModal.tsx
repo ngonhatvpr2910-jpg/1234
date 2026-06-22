@@ -455,15 +455,17 @@ function EmployeeIDCard({ employee, plantTitle, interactive = false, onPhotoUplo
   const getNameFontSize = (name: string) => {
     const len = name.trim().length;
     if (isNewHire) {
+      if (len > 35) return 'text-[8.5px]';
       if (len > 30) return 'text-[9.5px]';
-      if (len > 24) return 'text-[10.5px]';
+      if (len > 24) return 'text-[10px]';
       if (len > 18) return 'text-[11.5px]';
       return 'text-[13px]';
     } else {
-      if (len > 30) return 'text-[11px]';
-      if (len > 24) return 'text-[12.5px]';
-      if (len > 18) return 'text-[14.5px]';
-      return 'text-[17px]';
+      if (len > 35) return 'text-[9px]';
+      if (len > 30) return 'text-[10px]';
+      if (len > 24) return 'text-[12px]';
+      if (len > 18) return 'text-[14px]';
+      return 'text-[16.5px] font-black';
     }
   };
 
@@ -581,7 +583,7 @@ function EmployeeIDCard({ employee, plantTitle, interactive = false, onPhotoUplo
         </div>
 
         {/* Middle Area for Name and Info */}
-        <div className="flex-1 pl-4 flex flex-col justify-center items-start pr-16 select-text">
+        <div className="flex-1 pl-4 flex flex-col justify-center items-start pr-[115px] select-text">
           {isNewHire && (
             <div className="text-[19px] font-black text-amber-600 tracking-tight mb-1 leading-none uppercase">
               NHẬN VIỆC MỚI

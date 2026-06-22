@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Employee, DayProgress, AssemblyLine } from './types';
-import { HelpCircle, RefreshCw, Pencil, Check, X, ClipboardList, Target, TrendingUp, Sparkles, UserCheck, Plus, Trash2, Calendar } from 'lucide-react';
+import { HelpCircle, RefreshCw, Pencil, Check, X, ClipboardList, Target, TrendingUp, Sparkles, UserCheck, Plus, Trash2, Calendar, EyeOff } from 'lucide-react';
 import { LINE_CAPACITIES } from './mockData';
 
 interface PlanProgressTableProps {
@@ -101,6 +101,17 @@ export default function PlanProgressTable({
 
   const [isEditing, setIsEditing] = useState(false);
   const [tempProgress, setTempProgress] = useState<DayProgress[]>([]);
+  
+  // Custom states for hiding/unhiding and removing column choices
+  const [hiddenDays, setHiddenDays] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dclr_plan_progress_hidden_days');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return [];
+  });
+  const [activeChoiceColumn, setActiveChoiceColumn] = useState<number | null>(null);
+  const [isHiddenMenuOpen, setIsHiddenMenuOpen] = useState(false);
   
   // Toggle for automated syncing from Employee list vs Manual inputting
   const [autoSync, setAutoSync] = useState<boolean>(() => {
@@ -314,27 +325,32 @@ export default function PlanProgressTable({
     });
   }, [baseDaysList, autoSync, employees, todayISO]);
 
+  // Filtered list of days excluding the hidden ones
+  const visibleDaysList = React.useMemo(() => {
+    return currentDaysList.filter(day => !hiddenDays.includes(day.fullDate));
+  }, [currentDaysList, hiddenDays]);
+
   // --- STATS COMPUTING ---
   const lineDetails = {
     DCLR: {
       manager: 'KHIÊM',
-      demandTotal: currentDaysList.reduce((sum, day) => sum + getDemandCount('DCLR', day), 0),
-      receptionPlanTotal: currentDaysList.reduce((sum, day) => {
+      demandTotal: visibleDaysList.reduce((sum, day) => sum + getDemandCount('DCLR', day), 0),
+      receptionPlanTotal: visibleDaysList.reduce((sum, day) => {
         const isPastOrToday = normalizeDateToISO(day.fullDate) <= todayISO;
         return isPastOrToday ? sum + getDemandCount('DCLR', day) : sum;
       }, 0),
-      actualReceivedTotal: currentDaysList.reduce((sum, day) => sum + getReceivedCount('DCLR', day), 0),
-      actualResignedTotal: currentDaysList.reduce((sum, day) => sum + getResignedCount('DCLR', day), 0),
+      actualReceivedTotal: visibleDaysList.reduce((sum, day) => sum + getReceivedCount('DCLR', day), 0),
+      actualResignedTotal: visibleDaysList.reduce((sum, day) => sum + getResignedCount('DCLR', day), 0),
     },
     RMA: {
       manager: 'THỊNH',
-      demandTotal: currentDaysList.reduce((sum, day) => sum + getDemandCount('DC RMA BG', day), 0),
-      receptionPlanTotal: currentDaysList.reduce((sum, day) => {
+      demandTotal: visibleDaysList.reduce((sum, day) => sum + getDemandCount('DC RMA BG', day), 0),
+      receptionPlanTotal: visibleDaysList.reduce((sum, day) => {
         const isPastOrToday = normalizeDateToISO(day.fullDate) <= todayISO;
         return isPastOrToday ? sum + getDemandCount('DC RMA BG', day) : sum;
       }, 0),
-      actualReceivedTotal: currentDaysList.reduce((sum, day) => sum + getReceivedCount('DC RMA BG', day), 0),
-      actualResignedTotal: currentDaysList.reduce((sum, day) => sum + getResignedCount('DC RMA BG', day), 0),
+      actualReceivedTotal: visibleDaysList.reduce((sum, day) => sum + getReceivedCount('DC RMA BG', day), 0),
+      actualResignedTotal: visibleDaysList.reduce((sum, day) => sum + getResignedCount('DC RMA BG', day), 0),
     }
   };
 
@@ -369,7 +385,66 @@ export default function PlanProgressTable({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5" id="plan-progress-actions-container">
+          {/* List of Hidden Columns Restorer Dropdown */}
+          {hiddenDays.length > 0 && (
+            <div className="relative inline-block text-left" id="hidden-days-toggle-container">
+              <button
+                type="button"
+                onClick={() => setIsHiddenMenuOpen(!isHiddenMenuOpen)}
+                className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <EyeOff size={13} className="text-indigo-600" />
+                <span>Cột Đã Ẩn ({hiddenDays.length})</span>
+              </button>
+              {isHiddenMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsHiddenMenuOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white shadow-xl border border-slate-150 ring-1 ring-black/5 focus:outline-none z-50 overflow-hidden text-xs text-slate-750">
+                    <div className="px-4 py-3 bg-slate-50 font-bold text-slate-600 border-b border-slate-100 text-[10px] uppercase tracking-wider flex items-center justify-between">
+                      <span>Cột đang ẩn ({hiddenDays.length})</span>
+                      <button
+                        onClick={() => {
+                          setHiddenDays([]);
+                          try { localStorage.removeItem('dclr_plan_progress_hidden_days'); } catch (_) {}
+                          setIsHiddenMenuOpen(false);
+                        }}
+                        className="text-[10px] text-blue-650 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                      >
+                        Hiện tất cả
+                      </button>
+                    </div>
+                    <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+                      {hiddenDays.map((hDay) => (
+                        <div key={hDay} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 rounded-xl transition">
+                          <span className="font-mono font-bold text-slate-700">
+                            {hDay.split('-').reverse().join('/')} ({formatToShortDate(hDay)})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = hiddenDays.filter(d => d !== hDay);
+                              setHiddenDays(updated);
+                              try {
+                                localStorage.setItem('dclr_plan_progress_hidden_days', JSON.stringify(updated));
+                              } catch (_) {}
+                              if (updated.length === 0) {
+                                setIsHiddenMenuOpen(false);
+                              }
+                            }}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-850 font-bold hover:underline cursor-pointer"
+                          >
+                            Hiện lại
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {isEditing ? (
             <>
               <button
@@ -472,7 +547,7 @@ export default function PlanProgressTable({
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-32">QUẢN LÝ T.N</th>
                 
                 {/* Columns representing days */}
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   const isDynamic = autoSync && (matchedIdx === -1);
                   
@@ -480,7 +555,7 @@ export default function PlanProgressTable({
                     <th 
                       key={`demand-header-${dIdx}`} 
                       className={`py-3 px-1.5 border-r border-slate-200 text-center font-bold text-xs ${isEditing ? 'bg-amber-100/30' : 'min-w-[70px]'}`}
-                      style={isEditing ? { minWidth: isDynamic ? '125px' : '155px' } : undefined}
+                      style={isEditing ? { minWidth: isDynamic ? '125px' : (activeChoiceColumn === matchedIdx ? '175px' : '155px') } : undefined}
                     >
                       {isEditing ? (
                         isDynamic ? (
@@ -523,19 +598,60 @@ export default function PlanProgressTable({
                             <span className="text-[9px] text-indigo-700 tracking-wider font-extrabold uppercase">
                               ({day.date})
                             </span>
-                            {/* Remove date column */}
-                            <button
-                              type="button"
-                              title="Xóa cột lịch này"
-                              onClick={() => {
-                                if (matchedIdx !== -1) {
-                                  handleDeleteDayColumn(matchedIdx);
-                                }
-                              }}
-                              className="flex items-center bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] gap-0.5 transition font-medium cursor-pointer"
-                            >
-                              <Trash2 size={9} /> Gỡ bỏ
-                            </button>
+                            {/* Remove date column with interactive choice */}
+                            {activeChoiceColumn === matchedIdx ? (
+                              <div className="flex flex-col gap-1 w-full bg-slate-50 p-1 rounded border border-slate-200 mt-1">
+                                <span className="text-[8px] text-slate-550 font-bold uppercase tracking-wider block text-center">Lựa chọn:</span>
+                                <div className="grid grid-cols-2 gap-1 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updatedHidden = [...hiddenDays, day.fullDate];
+                                      setHiddenDays(updatedHidden);
+                                      try {
+                                        localStorage.setItem('dclr_plan_progress_hidden_days', JSON.stringify(updatedHidden));
+                                      } catch (_) {}
+                                      setActiveChoiceColumn(null);
+                                    }}
+                                    className="px-1 py-0.5 font-bold text-[8px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-250 transition cursor-pointer text-center whitespace-nowrap"
+                                    title="Ẩn tạm thời cột này khỏi bảng"
+                                  >
+                                    Ẩn cột
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleDeleteDayColumn(matchedIdx);
+                                      setActiveChoiceColumn(null);
+                                    }}
+                                    className="px-1 py-0.5 font-bold text-[8px] text-rose-700 bg-rose-50 hover:bg-rose-100 rounded border border-rose-250 transition cursor-pointer text-center whitespace-nowrap"
+                                    title="Gỡ bỏ vĩnh viễn cột ngày này"
+                                  >
+                                    Gỡ bỏ
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveChoiceColumn(null)}
+                                  className="w-full text-center text-[8px] text-slate-400 hover:text-slate-650 font-bold cursor-pointer hover:underline mt-0.5"
+                                >
+                                  Hủy bỏ
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                title="Xóa hoặc ẩn cột lịch này"
+                                onClick={() => {
+                                  if (matchedIdx !== -1) {
+                                    setActiveChoiceColumn(matchedIdx);
+                                  }
+                                }}
+                                className="flex items-center justify-center bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 border border-rose-200 px-1.5 py-0.5 rounded text-[9px] gap-0.5 transition font-medium cursor-pointer w-full"
+                              >
+                                <Trash2 size={9} /> Gỡ bỏ
+                              </button>
+                            )}
                           </div>
                         )
                       ) : (
@@ -577,7 +693,7 @@ export default function PlanProgressTable({
                   {lineDetails.DCLR.manager}
                 </td>
                 
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const dayIso = normalizeDateToISO(day.fullDate);
                   const isPast = dayIso < todayISO;
                   const useAuto = autoSync && !isPast;
@@ -650,7 +766,7 @@ export default function PlanProgressTable({
                   {lineDetails.RMA.manager}
                 </td>
                 
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const dayIso = normalizeDateToISO(day.fullDate);
                   const isPast = dayIso < todayISO;
                   const useAuto = autoSync && !isPast;
@@ -703,7 +819,7 @@ export default function PlanProgressTable({
                 <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={4}>
                   TỔNG CỘNG NHU CẦU ĐỀ XUẤT (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS)
                 </td>
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const sumValue = getDemandCount('DCLR', day) + getDemandCount('DC RMA BG', day);
 
                   return (
@@ -787,7 +903,7 @@ export default function PlanProgressTable({
                 <th className="py-3 px-4 border-r border-slate-200 text-center font-bold w-24 text-indigo-900 bg-indigo-50/40" rowSpan={2}>ĐỊNH BIÊN</th>
                 <th className="py-3 px-4 border-r border-slate-200 text-left font-bold w-32" rowSpan={2}>QUẢN LÝ T.N</th>
                 
-                {currentDaysList.map((day, dIdx) => (
+                {visibleDaysList.map((day, dIdx) => (
                   <th 
                     key={`reception-header-${dIdx}`} 
                     className={`py-1.5 px-1 border-r border-slate-200 text-center font-extrabold text-xs text-slate-700 ${isEditing ? 'min-w-[155px]' : 'min-w-[95px]'}`}
@@ -813,7 +929,7 @@ export default function PlanProgressTable({
                 <th className="py-3 px-3 text-center font-bold text-sky-900 min-w-[85px] bg-sky-50" rowSpan={2}>Còn lại</th>
               </tr>
               <tr className="bg-slate-100/50 text-slate-500 border-b border-slate-150 text-[10px]">
-                {currentDaysList.map((day, dIdx) => (
+                {visibleDaysList.map((day, dIdx) => (
                   <th key={`reception-sub-header-${dIdx}`} className="py-1 px-1 border-r border-slate-200 text-center font-bold text-slate-450 bg-slate-50/50 uppercase select-none">
                     KH / + / -
                   </th>
@@ -846,7 +962,7 @@ export default function PlanProgressTable({
                   {lineDetails.DCLR.manager}
                 </td>
                 
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const planVal = getDemandCount('DCLR', day);
                   const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   
@@ -974,7 +1090,7 @@ export default function PlanProgressTable({
                   {lineDetails.RMA.manager}
                 </td>
                 
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const planVal = getDemandCount('DC RMA BG', day);
                   const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   
@@ -1082,15 +1198,16 @@ export default function PlanProgressTable({
                 <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={4}>
                   TỔNG CỘNG KH & THỰC TIẾP NHẬN (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS - Hiện hữu {employees.filter(e => e.status === 'WORKING').length} NS)
                 </td>
-                {currentDaysList.map((day, dIdx) => {
+                {visibleDaysList.map((day, dIdx) => {
                   const dayPlanned = getDemandCount('DCLR', day) + getDemandCount('DC RMA BG', day);
+                  const matchedIdx = tempProgress.findIndex(tp => tp.fullDate === day.fullDate);
                   
-                  const dayActIn = isEditing
-                    ? ((tempProgress[dIdx].targets['DCLR'].actualIn ?? 0) + (tempProgress[dIdx].targets['DC RMA BG'].actualIn ?? 0))
+                  const dayActIn = isEditing && matchedIdx !== -1
+                    ? ((tempProgress[matchedIdx].targets['DCLR'].actualIn ?? 0) + (tempProgress[matchedIdx].targets['DC RMA BG'].actualIn ?? 0))
                     : (getReceivedCount('DCLR', day) + getReceivedCount('DC RMA BG', day));
 
-                  const dayActOut = isEditing
-                    ? ((tempProgress[dIdx].targets['DCLR'].actualOut ?? 0) + (tempProgress[dIdx].targets['DC RMA BG'].actualOut ?? 0))
+                  const dayActOut = isEditing && matchedIdx !== -1
+                    ? ((tempProgress[matchedIdx].targets['DCLR'].actualOut ?? 0) + (tempProgress[matchedIdx].targets['DC RMA BG'].actualOut ?? 0))
                     : (getResignedCount('DCLR', day) + getResignedCount('DC RMA BG', day));
                   
                   return (
