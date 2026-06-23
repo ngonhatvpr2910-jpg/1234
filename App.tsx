@@ -12,7 +12,8 @@ import EmployeeTable from './EmployeeTable';
 import EmployeeModal from './EmployeeModal';
 import EmployeeCardModal from './EmployeeCardModal';
 import AnalyticsSection from './AnalyticsSection';
-import { ClipboardList, BarChart3, Users, Settings, Briefcase, Sparkles, RefreshCw, Layers, AlertTriangle } from 'lucide-react';
+import DailyManpowerReport from './DailyManpowerReport';
+import { ClipboardList, BarChart3, Users, Settings, Briefcase, Sparkles, RefreshCw, Layers, AlertTriangle, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -127,7 +128,7 @@ export default function App() {
 
   // --- FILTERS & INTERACTIVE STATE ---
   const [selectedLine, setSelectedLine] = useState<AssemblyLine | 'ALL'>('ALL');
-  const [activeTab, setActiveTab] = useState<'monitors' | 'recruitments' | 'analytics'>('monitors');
+  const [activeTab, setActiveTab] = useState<'monitors' | 'recruitments' | 'analytics' | 'daily_report'>('monitors');
 
   // Modal controller
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -374,7 +375,14 @@ export default function App() {
               className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
             >
               <BarChart3 size={14} />
-              <span>GĐ 3: Biểu Đồ & Lý do Nghỉ việc</span>
+              <span>GĐ 3: Biểu Đồ & Thống kê</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('daily_report')}
+              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'daily_report' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
+            >
+              <Calendar size={14} />
+              <span>GĐ 4: Báo Cáo Chuyên cần Gộp</span>
             </button>
           </nav>
 
@@ -411,7 +419,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
         
         {/* STATS OVERVIEW IS CONSTANTLY VISIBLE TO REDUCE BLIND SPOTS */}
-        <StatsSection employees={employees} selectedLine={selectedLine} lineCapacities={lineCapacities} />
+        <StatsSection employees={employees} selectedLine={selectedLine} lineCapacities={lineCapacities} dayProgress={dayProgress} />
 
         {/* TRANSITIONAL TAB STATES ANIMATED WITH MOTION */}
         <div className="mt-4">
@@ -473,6 +481,26 @@ export default function App() {
                 <AnalyticsSection 
                   employees={employees} 
                   selectedLine={selectedLine} 
+                  dayProgress={dayProgress}
+                  onUpdateEmployees={saveEmployeesToStorage}
+                />
+              </motion.div>
+            )}
+
+            {/* TAB 4: DAILY MANPOWER REPORT */}
+            {activeTab === 'daily_report' && (
+              <motion.div
+                key="daily-report-tab"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+              >
+                <DailyManpowerReport
+                  employees={employees}
+                  dayProgress={dayProgress}
+                  selectedLine={selectedLine}
+                  onUpdateDayProgress={saveProgressToStorage}
                 />
               </motion.div>
             )}

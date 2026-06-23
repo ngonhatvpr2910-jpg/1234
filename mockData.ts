@@ -19,6 +19,14 @@ export const RESIGNATION_REASONS = [
   'Hết hạn hợp đồng không gia hạn'
 ];
 
+export const LEAVE_REASONS = [
+  'Nghỉ Phép',
+  'Nghỉ Thai sản',
+  'Nghỉ Tang',
+  'Nghỉ Không lương',
+  'Nghỉ Không phép'
+];
+
 export const MANAGERS = {
   'DCLR': 'KHIÊM',
   'DC RMA BG': 'THỊNH'

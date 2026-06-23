@@ -16,7 +16,8 @@ export interface Employee {
   line: AssemblyLine; // Assembly line (Dây chuyền)
   manager: string;    // Quản lý tiếp nhận (Khiêm, Thịnh)
   joinDate: string;   // Onboarding date (Ngày nhận việc)
-  resignDate?: string;// Resignation date (Ngày nghỉ việc)
+  resignDate?: string;// Resignation date (Ngày bắt đầu nghỉ / Ngày nghỉ việc)
+  leaveEndDate?: string; // Tới Ngày (Ngày kết thúc nghỉ)
   resignReason?: string; // Reason for leaving (Lý do nghỉ việc)
   status: EmployeeStatus;
   notes?: string;
@@ -45,6 +46,7 @@ export interface DailyTargets {
   reception?: number; // Kế hoạch tiếp nhận nhân sự theo ngày
   actualIn?: number;  // Thực tế nhận việc (nhập tay/thực tế)
   actualOut?: number; // Thực tế nghỉ việc (nhập tay/nghỉ việc)
+  tempWorkers?: number; // Nhân sự thời vụ
 }
 
 export interface DayProgress {

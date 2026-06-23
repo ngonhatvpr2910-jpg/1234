@@ -1,6 +1,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Employee, AssemblyLine, EmployeeStatus } from './types';
-import { RESIGNATION_REASONS, MANAGERS } from './mockData';
+import { RESIGNATION_REASONS, LEAVE_REASONS, MANAGERS } from './mockData';
 import { X, Save, AlertOctagon, Calendar, Briefcase, User, Phone, CheckCircle, Camera, Upload } from 'lucide-react';
 
 interface EmployeeModalProps {
@@ -101,6 +101,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
 
   // Resignation states
   const [resignDate, setResignDate] = useState('2026-06-15');
+  const [leaveEndDate, setLeaveEndDate] = useState('');
   const [selectedReasonOption, setSelectedReasonOption] = useState(RESIGNATION_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
   const [isCustomReason, setIsCustomReason] = useState(false);
@@ -132,7 +133,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
           setJoinDateStr('15/06/2026');
         }
 
-        setStatus(employee.status);
+        setStatus(mode === 'RESIGN' ? 'RESIGNED' : employee.status);
         setNotes(employee.notes || '');
         setBirthday(employee.birthday || '');
         setBirthplace(employee.birthplace || '');
@@ -143,10 +144,12 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         } else {
           setResignDate('2026-06-15'); // Current default in simulated date
         }
+        setLeaveEndDate(employee.leaveEndDate || '');
 
         if (employee.resignReason) {
           const isPreset = RESIGNATION_REASONS.includes(employee.resignReason);
-          if (isPreset) {
+          const isLeavePreset = LEAVE_REASONS.includes(employee.resignReason);
+          if (isPreset || isLeavePreset) {
             setSelectedReasonOption(employee.resignReason);
             setIsCustomReason(false);
           } else {
@@ -155,7 +158,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
             setIsCustomReason(true);
           }
         } else {
-          setSelectedReasonOption(RESIGNATION_REASONS[0]);
+          setSelectedReasonOption(employee.status === 'LEAVE' ? LEAVE_REASONS[0] : RESIGNATION_REASONS[0]);
           setCustomReason('');
           setIsCustomReason(false);
         }
@@ -174,6 +177,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         setBirthplace('');
         setAvatar(undefined);
         setResignDate('2026-06-15');
+        setLeaveEndDate('');
         setSelectedReasonOption(RESIGNATION_REASONS[0]);
         setCustomReason('');
         setIsCustomReason(false);
@@ -202,7 +206,8 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
     }
     
     if (mode === 'RESIGN') {
-      if (!resignDate) newErrors.resignDate = 'Cần điền ngày nghỉ việc';
+      if (!resignDate) newErrors.resignDate = 'Cần điền ngày bắt đầu nghỉ';
+      if (status === 'LEAVE' && !leaveEndDate) newErrors.leaveEndDate = 'Cần điền ngày kết thúc nghỉ';
       if (isCustomReason && !customReason.trim()) {
         newErrors.resignReason = 'Hãy nhập lý do nghỉ việc chi tiết';
       }
@@ -222,10 +227,11 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
     if (mode === 'RESIGN') {
       onSave({
         ...employee,
-        status: 'RESIGNED',
+        status: status,
         resignDate,
+        leaveEndDate: status === 'LEAVE' ? leaveEndDate : undefined,
         resignReason: finalReason,
-        notes: notes ? `${notes} (Cập nhật nghỉ ngày ${resignDate})` : `Thôi việc: ${finalReason}`
+        notes: notes ? `${notes} (Cập nhật nghỉ từ ngày ${resignDate})` : `${status === 'RESIGNED' ? 'Thôi việc' : 'Nghỉ vắng'}: ${finalReason}`
       });
     } else {
       onSave({
@@ -242,7 +248,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
         birthday,
         birthplace,
         avatar,
-        ...((status === 'RESIGNED' || status === 'LEAVE') ? { resignDate, resignReason: finalReason } : { resignDate: undefined, resignReason: undefined })
+        ...((status === 'RESIGNED' || status === 'LEAVE') ? { resignDate, leaveEndDate: status === 'LEAVE' ? leaveEndDate : undefined, resignReason: finalReason } : { resignDate: undefined, leaveEndDate: undefined, resignReason: undefined })
       });
     }
     onClose();
@@ -283,32 +289,74 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
           {/* RESIGNATION FORM MODE */}
           {mode === 'RESIGN' ? (
             <div className="space-y-4">
-              <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex gap-3 text-rose-950 text-xs">
+              <div className={`p-4 rounded-xl border flex gap-3 text-xs ${status === 'RESIGNED' ? 'bg-rose-50/50 border-rose-100 text-rose-950' : 'bg-amber-50/50 border-amber-100 text-amber-950'}`}>
                 <div className="mt-0.5">⚠️</div>
                 <div>
-                  <p className="font-bold mb-1">Xác nhận chuyển trạng thái thôi việc</p>
-                  <p className="leading-relaxed">Ủy thác thôi việc đối với nhân viên <strong className="text-rose-700">{fullName}</strong> thuộc chuyền <strong>{line}</strong>. Hệ thống sẽ cập nhật trạng thái đã nghỉ việc và phục vụ cho hạch toán báo cáo biến động.</p>
+                  <p className="font-bold mb-1">Xác nhận chuyển trạng thái {status === 'RESIGNED' ? 'thôi việc' : 'nghỉ tạm thời'}</p>
+                  <p className="leading-relaxed">Ủy thác {status === 'RESIGNED' ? 'thôi việc' : 'nghỉ vắng'} đối với nhân viên <strong className={status === 'RESIGNED' ? 'text-rose-700' : 'text-amber-700'}>{fullName}</strong> thuộc chuyền <strong>{line}</strong>. Hệ thống sẽ cập nhật trạng thái đã nghỉ và phục vụ cho hạch toán báo cáo biến động.</p>
                 </div>
               </div>
 
-              {/* Date of leaving */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <Calendar size={13} className="text-rose-500" /> Ngày Nghỉ Việc Chính Thức <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={resignDate}
-                  onChange={(e) => setResignDate(e.target.value)}
-                  className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
-                />
-                {errors.resignDate && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.resignDate}</p>}
+              {/* Date of leaving and Status */}
+              <div className={`grid grid-cols-1 gap-4 ${status === 'LEAVE' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Calendar size={13} className="text-rose-500" /> Ngày Bắt Đầu Nghỉ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={resignDate}
+                    onChange={(e) => setResignDate(e.target.value)}
+                    className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white"
+                  />
+                  {errors.resignDate && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.resignDate}</p>}
+                </div>
+
+                {status === 'LEAVE' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Calendar size={13} className="text-amber-500" /> Ngày Kết Thúc Nghỉ <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={leaveEndDate}
+                      onChange={(e) => setLeaveEndDate(e.target.value)}
+                      className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                    />
+                    {errors.leaveEndDate && <p className="text-rose-600 text-xs mt-1 font-bold">{errors.leaveEndDate}</p>}
+                  </div>
+                )}
+                
+                {/* Status Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Hình thức nghỉ
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => {
+                      const s = e.target.value as EmployeeStatus;
+                      setStatus(s);
+                      if (s === 'RESIGNED') {
+                        setSelectedReasonOption(RESIGNATION_REASONS[0]);
+                        setIsCustomReason(false);
+                      } else {
+                        setSelectedReasonOption(LEAVE_REASONS[0]);
+                        setIsCustomReason(false);
+                      }
+                    }}
+                    className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white text-slate-800"
+                  >
+                    <option value="RESIGNED">Thôi việc (Nghỉ hẳn)</option>
+                    <option value="LEAVE">Nghỉ phép / Nghỉ tạm thời</option>
+                  </select>
+                </div>
               </div>
 
               {/* Resignation Reason selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Lý do nghỉ việc chính thức <span className="text-rose-500">*</span>
+                  Lý do nghỉ {status === 'RESIGNED' ? 'chính thức' : 'tạm thời'} <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={isCustomReason ? 'Khác' : selectedReasonOption}
@@ -324,7 +372,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                   }}
                   className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white text-slate-800"
                 >
-                  {RESIGNATION_REASONS.map((reason) => (
+                  {(status === 'LEAVE' ? LEAVE_REASONS : RESIGNATION_REASONS).map((reason) => (
                     <option key={reason} value={reason}>{reason}</option>
                   ))}
                   <option value="Khác">Lý do khác... (Viết tay dập mẫu)</option>
@@ -587,7 +635,17 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                   </label>
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as EmployeeStatus;
+                      setStatus(newStatus);
+                      if (newStatus === 'LEAVE' && !LEAVE_REASONS.includes(selectedReasonOption) && selectedReasonOption !== 'Khác') {
+                        setSelectedReasonOption(LEAVE_REASONS[0]);
+                        setIsCustomReason(false);
+                      } else if (newStatus === 'RESIGNED' && !RESIGNATION_REASONS.includes(selectedReasonOption) && selectedReasonOption !== 'Khác') {
+                        setSelectedReasonOption(RESIGNATION_REASONS[0]);
+                        setIsCustomReason(false);
+                      }
+                    }}
                     className="w-full text-sm font-semibold p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-800"
                   >
                     <option value="WORKING">Đang làm việc tại chuyền</option>
@@ -623,7 +681,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                   <h4 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-1.5 ${status === 'RESIGNED' ? 'text-rose-800' : 'text-amber-800'}`}>
                     ⚙️ Thuộc tính {status === 'RESIGNED' ? 'Thôi việc hẳn' : 'Nghỉ vắng / Nghỉ phép'} mở rộng
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={`grid grid-cols-1 gap-3 ${status === 'LEAVE' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                     <div>
                       <label className={`block text-[10px] font-bold uppercase mb-1 ${status === 'RESIGNED' ? 'text-rose-700' : 'text-amber-700'}`}>
                         {status === 'RESIGNED' ? 'Ngày nghỉ hẳn' : 'Ngày bắt đầu nghỉ'}
@@ -635,6 +693,19 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                         className={`w-full text-xs font-bold p-2 rounded border text-slate-800 bg-white ${status === 'RESIGNED' ? 'border-rose-200 focus:ring-rose-500' : 'border-amber-200 focus:ring-amber-500'}`}
                       />
                     </div>
+                    {status === 'LEAVE' && (
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1 text-amber-700">
+                          Ngày kết thúc nghỉ
+                        </label>
+                        <input
+                          type="date"
+                          value={leaveEndDate}
+                          onChange={(e) => setLeaveEndDate(e.target.value)}
+                          className="w-full text-xs font-bold p-2 rounded border border-amber-200 focus:ring-amber-500 text-slate-800 bg-white"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className={`block text-[10px] font-bold uppercase mb-1 ${status === 'RESIGNED' ? 'text-rose-700' : 'text-amber-700'}`}>
                         {status === 'RESIGNED' ? 'Dữ liệu lý do thôi việc' : 'Dữ liệu lý do nghỉ phép'}
@@ -653,7 +724,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, employee, mode 
                         }}
                         className={`w-full text-[11px] font-semibold p-2 border rounded text-slate-800 bg-white ${status === 'RESIGNED' ? 'border-rose-200' : 'border-amber-200'}`}
                       >
-                        {RESIGNATION_REASONS.map((res) => (
+                        {(status === 'LEAVE' ? LEAVE_REASONS : RESIGNATION_REASONS).map((res) => (
                           <option key={`sub-res-${res}`} value={res}>{res}</option>
                         ))}
                         <option value="Khác">Lý do khác...</option>

@@ -3,6 +3,7 @@ import { Employee, AssemblyLine, EmployeeStatus } from './types';
 import { Search, UserPlus, FileSpreadsheet, Edit3, Trash2, UserMinus, Settings, MapPin, Calendar, HelpCircle, Filter, Check, AlertTriangle, Printer, Contact } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ExcelImporter from './ExcelImporter';
+import * as XLSX from 'xlsx';
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -275,81 +276,77 @@ export default function EmployeeTable({
     }
   };
 
-  // Safe CSV export with UTF-8 BOM so Vietnamese loads perfectly in Excel
-  const handleExportCSV = () => {
-    const headers = [
-      'STT',
-      'Mã Nhân Viên',
-      'Họ và Tên',
-      'Giới tính',
-      'Ngày sinh',
-      'Nơi sinh',
-      'Số điện thoại',
-      'Dây chuyền',
-      'Quản lý tiếp nhận',
-      'Ngày nhận việc',
-      'Trạng thái',
-      'Phòng ban/Nhà máy',
-      'Phòng ban/Chuyền',
-      'Bộ phận/Tổ',
-      'HĐ 1 Pháp nhân',
-      'HĐ 1 Bắt đầu',
-      'HĐ 1 Kết thúc',
-      'Mã HĐ',
-      'Loại HĐ 2',
-      'HĐ 2 Pháp nhân',
-      'HĐ 2 Bắt đầu',
-      'HĐ 2 Kết thúc',
-      'Ngày nghỉ việc',
-      'Lý do nghỉ việc',
-      'Ghi chú'
-    ];
+  // Safe Excel export (.xlsx) using SheetJS so Vietnamese holds formatting perfectly
+  const handleExportExcel = () => {
+    // Translate the employee records to Vietnamese friendly columns for the Excel sheet
+    const excelData = sortedEmployees.map((emp, index) => ({
+      'STT': index + 1,
+      'Mã Nhân Viên': emp.code,
+      'Họ và Tên': emp.fullName,
+      'Giới tính': emp.gender,
+      'Ngày sinh': emp.birthday || '',
+      'Nơi sinh': emp.birthplace || '',
+      'Số điện thoại': emp.phone,
+      'Dây chuyền': emp.line,
+      'Quản lý tiếp nhận': emp.manager,
+      'Ngày nhận việc': emp.joinDate,
+      'Trạng thái': emp.status === 'WORKING' ? 'Đang làm việc' : emp.status === 'RESIGNED' ? 'Thôi việc (Nghỉ hẳn)' : emp.status === 'LEAVE' ? 'Nghỉ phép / Tạm nghỉ' : 'Chờ nhận việc',
+      'Phòng ban/Nhà máy': emp.department || 'NM Bình Dương',
+      'Phòng ban/Chuyền': emp.assemblyGroup || 'Lắp ráp',
+      'Bộ phận/Tổ': emp.section || 'Lắp ráp RO',
+      'HĐ 1 Pháp nhân': emp.contract1Legal || '',
+      'HĐ 1 Bắt đầu': emp.contract1Start || '',
+      'HĐ 1 Kết thúc': emp.contract1End || '',
+      'Mã HĐ': emp.contractCode || '',
+      'Loại HĐ 2': emp.contractType2 || '',
+      'HĐ 2 Pháp nhân': emp.contract2Legal || '',
+      'HĐ 2 Bắt đầu': emp.contract2Start || '',
+      'HĐ 2 Kết thúc': emp.contract2End || '',
+      'Ngày nghỉ việc': emp.resignDate || '',
+      'Lý do nghỉ việc': emp.resignReason || '',
+      'Ghi chú': emp.notes || ''
+    }));
 
-    const rows = sortedEmployees.map((emp, index) => [
-      index + 1,
-      emp.code,
-      emp.fullName,
-      emp.gender,
-      emp.birthday || '',
-      emp.birthplace || '',
-      emp.phone,
-      emp.line,
-      emp.manager,
-      emp.joinDate,
-      emp.status === 'WORKING' ? 'Đang làm việc' : emp.status === 'RESIGNED' ? 'Thôi việc (Nghỉ hẳn)' : emp.status === 'LEAVE' ? 'Nghỉ phép / Tạm nghỉ' : 'Chờ nhận việc',
-      emp.department || 'NM Bình Dương',
-      emp.assemblyGroup || 'Lắp ráp',
-      emp.section || 'Lắp ráp RO',
-      emp.contract1Legal || '',
-      emp.contract1Start || '',
-      emp.contract1End || '',
-      emp.contractCode || '',
-      emp.contractType2 || '',
-      emp.contract2Legal || '',
-      emp.contract2Start || '',
-      emp.contract2End || '',
-      emp.resignDate || '',
-      emp.resignReason || '',
-      emp.notes || ''
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
     
+    // Add columns auto-fit width
+    const colWidths = [
+      { wch: 6 },   // STT
+      { wch: 15 },  // Mã NV
+      { wch: 25 },  // Họ tên
+      { wch: 10 },  // Giới tính
+      { wch: 12 },  // Ngày sinh
+      { wch: 20 },  // Nơi sinh
+      { wch: 15 },  // Điện thoại
+      { wch: 15 },  // Dây chuyền
+      { wch: 20 },  // Quản lý
+      { wch: 12 },  // Nhận việc
+      { wch: 20 },  // Trạng thái
+      { wch: 20 },  // Bộ phận
+      { wch: 20 },  // Chuyền
+      { wch: 15 },  // Tổ
+      { wch: 20 },  // HĐ 1 PN
+      { wch: 12 },  // HĐ 1 BĐ
+      { wch: 12 },  // HĐ 1 KT
+      { wch: 15 },  // Mã HĐ
+      { wch: 15 },  // Loại HĐ 2
+      { wch: 15 },  // HĐ 2 PN
+      { wch: 12 },  // HĐ 2 BĐ
+      { wch: 12 },  // HĐ 2 KT
+      { wch: 12 },  // Ngày nghỉ
+      { wch: 30 },  // Lý do nghỉ
+      { wch: 25 }   // Ghi chú
+    ];
+    worksheet['!cols'] = colWidths;
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh sách Nhân sự');
+
     // Name the file cleanly with date stamp
     const timestamp = new Date().toISOString().split('T')[0];
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Báo_cáo_Nhân_sự_DCLR_${timestamp}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    XLSX.writeFile(workbook, `Bao_cao_Nhan_su_DCLR_${timestamp}.xlsx`);
   };
 
   return (
@@ -396,14 +393,14 @@ export default function EmployeeTable({
               <span>In Thẻ Hàng Loạt</span>
             </button>
 
-            {/* Export CSV Button (Secondary) */}
+            {/* Export Excel Button (Secondary) */}
             <button
-              onClick={handleExportCSV}
-              id="btn-export-csv"
-              className="flex-1 lg:flex-initial flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:text-slate-950 transition-all border border-slate-200"
+              onClick={handleExportExcel}
+              id="btn-export-excel"
+              className="flex-1 lg:flex-initial flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-semibold hover:text-slate-950 transition-all border border-slate-200 cursor-pointer"
             >
               <FileSpreadsheet size={16} className="text-emerald-600" />
-              <span>Xuất File Excel/CSV</span>
+              <span>Xuất File Excel</span>
             </button>
 
             {/* Import Excel Button (Auxiliary/Low-key) */}
@@ -693,9 +690,19 @@ export default function EmployeeTable({
                               >
                                 <span className="flex items-center gap-1.5">
                                   <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                                  Đã nghỉ việc
+                                  Thôi việc (Nghỉ hẳn)
                                 </span>
                                 {statusFilter === 'RESIGNED' && <Check size={13} className="text-indigo-600" />}
+                              </button>
+                              <button
+                                onClick={() => { setStatusFilter('LEAVE'); setIsStatusMenuOpen(false); }}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition text-xs font-semibold ${statusFilter === 'LEAVE' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse-gentle"></span>
+                                  Nghỉ phép / Tạm nghỉ
+                                </span>
+                                {statusFilter === 'LEAVE' && <Check size={13} className="text-indigo-600" />}
                               </button>
                             </div>
                           </div>
