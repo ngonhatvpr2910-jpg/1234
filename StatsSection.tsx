@@ -1,6 +1,7 @@
 import { Employee, AssemblyLine, DayProgress } from './types';
 import { Users, UserCheck, UserMinus, Percent, Award, AlertTriangle } from 'lucide-react';
 import { LINE_CAPACITIES } from './mockData';
+import { format } from 'date-fns';
 
 interface StatsSectionProps {
   employees: Employee[];
@@ -234,11 +235,15 @@ export default function StatsSection({ employees, selectedLine, lineCapacities, 
     };
   };
 
-  const dateOptions = dayProgress && dayProgress.length > 0 
+  const todayISO = format(new Date(), 'yyyy-MM-dd');
+
+  const rawDateOptions = dayProgress && dayProgress.length > 0 
     ? dayProgress.map(dp => dp.fullDate)
     : ['2026-06-15', '2026-06-16', '2026-06-17', '2026-06-18', '2026-06-19', '2026-06-20', '2026-06-21', '2026-06-22', '2026-06-23', '2026-06-24'];
     
-  const defaultSelectedDate = dateOptions.includes('2026-06-23') ? '2026-06-23' : (dateOptions[dateOptions.length - 1] || '2026-06-23');
+  const dateOptions = Array.from(new Set([...rawDateOptions, todayISO])).sort();
+    
+  const defaultSelectedDate = dateOptions.includes(todayISO) ? todayISO : (dateOptions[dateOptions.length - 1] || todayISO);
 
   // 1. Day Stats
   const dayStats = getManpowerStatsForDate(defaultSelectedDate);

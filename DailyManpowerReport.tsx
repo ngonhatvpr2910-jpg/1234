@@ -159,7 +159,21 @@ export default function DailyManpowerReport({ employees, dayProgress, selectedLi
 
         const notes = [];
         if (leaveEmployees.length > 0) {
-          notes.push(`${leaveEmployees.length} nhân sự nghỉ: ${leaveEmployees.map(e => e.fullName).join(', ')}`);
+          const withoutPermission = leaveEmployees.filter(e => {
+            const reason = (e.resignReason || '').toLowerCase().trim();
+            return reason === 'nghỉ không phép' || reason === 'không phép' || reason.includes('không phép');
+          });
+          const withPermission = leaveEmployees.filter(e => {
+            const reason = (e.resignReason || '').toLowerCase().trim();
+            return !(reason === 'nghỉ không phép' || reason === 'không phép' || reason.includes('không phép'));
+          });
+
+          if (withPermission.length > 0) {
+            notes.push(`Có phép (${withPermission.length}): ${withPermission.map(e => `${e.fullName} (${e.resignReason || 'Nghỉ phép'})`).join(', ')}`);
+          }
+          if (withoutPermission.length > 0) {
+            notes.push(`Không phép (${withoutPermission.length}): ${withoutPermission.map(e => e.fullName).join(', ')}`);
+          }
         }
         if (newHires.length > 0) {
           notes.push(`${newHires.length} NS mới: ${newHires.map(e => e.fullName).join(', ')}`);
@@ -229,10 +243,6 @@ export default function DailyManpowerReport({ employees, dayProgress, selectedLi
             </td>
 
             <td className="py-2 px-2 text-[11px] text-slate-600 border-r border-slate-200 whitespace-normal break-words">
-              {reasonText || '-'}
-            </td>
-
-            <td className="py-2 px-2 text-[11px] text-slate-600 border-r border-slate-200 whitespace-normal break-words">
               {noteText}
             </td>
 
@@ -250,7 +260,7 @@ export default function DailyManpowerReport({ employees, dayProgress, selectedLi
     if (rows.length === 0) {
       rows.push(
         <tr key="empty">
-          <td colSpan={9} className="py-8 text-center text-slate-500 text-sm">
+          <td colSpan={8} className="py-8 text-center text-slate-500 text-sm">
             Không có dữ liệu báo cáo cho khoảng thời gian này
           </td>
         </tr>
@@ -283,7 +293,6 @@ export default function DailyManpowerReport({ employees, dayProgress, selectedLi
                 <th className="py-2 px-2 text-center border-r border-slate-200 text-orange-700">Thời vụ</th>
                 <th className="py-2 px-2 text-center border-r border-slate-200 text-amber-700">Tổng nghỉ</th>
                 <th className="py-2 px-2 text-center border-r border-slate-200 text-emerald-700">Đi làm</th>
-                <th className="py-2 px-2 border-r border-slate-200 min-w-[120px] max-w-[150px]">Lý do xin nghỉ</th>
                 <th className="py-2 px-2 border-r border-slate-200 min-w-[150px] max-w-[200px]">Ghi chú</th>
                 <th className="py-2 px-2 text-center p-2 break-normal max-w-[60px]">Tỉ lệ chuyên cần</th>
               </tr>

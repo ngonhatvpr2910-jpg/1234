@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Employee, AssemblyLine, DayProgress } from './types';
 import { Award, Target, HelpCircle, Activity, TrendingUp, TrendingDown, Users, AlertTriangle, Calendar, Info, Search, Trash2, X, Filter, FileSpreadsheet } from 'lucide-react';
@@ -17,13 +17,27 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
   // Filters
   const filteredList = employees.filter(emp => selectedLine === 'ALL' || emp.line === selectedLine);
 
+  // Get today's real date dynamically in YYYY-MM-DD format
+  const todayISO = format(new Date(), 'yyyy-MM-dd');
+
   // --- CALCULATE ATTENDANCE RATES FOR DAY, WEEK, MONTH ---
-  const dateOptions = dayProgress && dayProgress.length > 0 
+  const rawDateOptions = dayProgress && dayProgress.length > 0 
     ? dayProgress.map(dp => dp.fullDate)
     : ['2026-06-15', '2026-06-16', '2026-06-17', '2026-06-18', '2026-06-19', '2026-06-20', '2026-06-21', '2026-06-22', '2026-06-23', '2026-06-24'];
     
-  const defaultSelectedDate = dateOptions.includes('2026-06-23') ? '2026-06-23' : (dateOptions[dateOptions.length - 1] || '2026-06-23');
+  // Ensure the dateOptions always dynamically includes the current date so that today is always present and selectable
+  const dateOptions = Array.from(new Set([...rawDateOptions, todayISO])).sort();
+    
+  const defaultSelectedDate = dateOptions.includes(todayISO) ? todayISO : (dateOptions[dateOptions.length - 1] || todayISO);
   const [selectedDateStr, setSelectedDateStr] = useState(defaultSelectedDate);
+
+  // Sync selectedDateStr with today's date on mount or when todayISO changes
+  useEffect(() => {
+    if (dateOptions.includes(todayISO)) {
+      setSelectedDateStr(todayISO);
+    }
+  }, [todayISO, dayProgress]);
+
   const [chartViewMode, setChartViewMode] = useState<'WEEK_DAYS' | 'WEEKS' | 'MONTHS'>('WEEK_DAYS');
 
   // --- HISTORICAL & FUTURE TRACKING STATES AND CONTEXT ---
@@ -290,11 +304,11 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
     return emp.status === 'RESIGNED' || emp.status === 'LEAVE' || (emp.resignDate && emp.resignDate !== '');
   }).map(emp => {
     const isResigned = emp.status === 'RESIGNED';
-    const startStr = emp.resignDate || emp.joinDate || '2026-06-23';
+    const startStr = emp.resignDate || emp.joinDate || todayISO;
     const endStr = emp.status === 'LEAVE' ? emp.leaveEndDate || '' : '';
     
-    // Compare dates to "2026-06-23" (representing today's perspective)
-    const todayStr = '2026-06-23';
+    // Compare dates to today's perspective dynamically
+    const todayStr = todayISO;
     let timeCategory: 'PAST' | 'PRESENT' | 'FUTURE' = 'PRESENT';
     
     if (isResigned) {
