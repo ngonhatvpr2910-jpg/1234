@@ -230,8 +230,31 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
     });
   }
 
-  // --- CALCULATE DAILY ATTENDANCE FOR ALL DAYS IN SELECTED WEEK ---
-  const weekDaysData = weekDatesStr.map(ds => {
+  // --- CALCULATE DAILY ATTENDANCE FOR 7 DAYS CENTERED ON SELECTED DATE ---
+  const centeredWeekDatesStr = [];
+  try {
+    const centerDateObj = extractDate(selectedDateStr);
+    for (let i = -3; i <= 3; i++) {
+      const tempD = new Date(centerDateObj);
+      tempD.setDate(centerDateObj.getDate() + i);
+      const yyyy = tempD.getFullYear();
+      const mm = String(tempD.getMonth() + 1).padStart(2, '0');
+      const dd = String(tempD.getDate()).padStart(2, '0');
+      centeredWeekDatesStr.push(`${yyyy}-${mm}-${dd}`);
+    }
+  } catch {
+    // Fallback if date extraction fails
+    for (let i = -3; i <= 3; i++) {
+      const tempD = new Date();
+      tempD.setDate(tempD.getDate() + i);
+      const yyyy = tempD.getFullYear();
+      const mm = String(tempD.getMonth() + 1).padStart(2, '0');
+      const dd = String(tempD.getDate()).padStart(2, '0');
+      centeredWeekDatesStr.push(`${yyyy}-${mm}-${dd}`);
+    }
+  }
+
+  const weekDaysData = centeredWeekDatesStr.map(ds => {
     const stats = getManpowerStatsForDate(ds);
     const dayRate = stats.total > 0 ? (stats.working / stats.total) * 100 : 0;
     const dateObj = extractDate(ds);
@@ -245,6 +268,7 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
       rateRaw: dayRate,
       working: stats.working,
       total: stats.total,
+      fullDate: ds,
       label: `${dayOfWeekStr} (${format(dateObj, 'dd/MM/yyyy')})`,
       color: isSelected ? '#f59e0b' : '#3b82f6' // Amber for selected date, Blue for other days
     };
@@ -727,7 +751,16 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
                     barSize={activeBarSize}
                   >
                     {activeChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.color} 
+                        style={{ cursor: chartViewMode === 'WEEK_DAYS' ? 'pointer' : 'default' }}
+                        onClick={() => {
+                          if (chartViewMode === 'WEEK_DAYS' && entry.fullDate) {
+                            setSelectedDateStr(entry.fullDate);
+                          }
+                        }}
+                      />
                     ))}
                     <LabelList 
                       dataKey="Tỉ lệ chuyên cần (%)" 
