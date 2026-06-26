@@ -404,7 +404,7 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
   const resignedList = scopeRecords.filter(r => r.type === 'RESIGNED').map(r => r.employee);
   const leaveList = scopeRecords.filter(r => r.type === 'LEAVE').map(r => r.employee);
 
-  const activeList = filteredList.filter(emp => emp.status === 'WORKING');
+  const activeList = filteredList.filter(emp => emp.status !== 'RESIGNED');
   const onboardingList = filteredList.filter(emp => emp.status === 'ONBOARDING');
 
   // Filter history records for display in the tab
@@ -1023,13 +1023,13 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
                 <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
                   <span className="text-[10px] uppercase font-bold text-blue-600 block mb-0.5">Dây chuyền DCLR</span>
                   <span className="text-xl font-extrabold text-blue-800">
-                    {employees.filter(e => e.line === 'DCLR' && e.status === 'WORKING').length} <span className="text-xs font-semibold text-slate-500">NS</span>
+                    {employees.filter(e => e.line === 'DCLR' && e.status !== 'RESIGNED').length} <span className="text-xs font-semibold text-slate-500">NS</span>
                   </span>
                 </div>
                 <div className="bg-teal-50/50 p-3 rounded-xl border border-teal-100">
                   <span className="text-[10px] uppercase font-bold text-teal-600 block mb-0.5">DC RMA BG</span>
                   <span className="text-xl font-extrabold text-teal-800">
-                    {employees.filter(e => e.line === 'DC RMA BG' && e.status === 'WORKING').length} <span className="text-xs font-semibold text-slate-500">NS</span>
+                    {employees.filter(e => e.line === 'DC RMA BG' && e.status !== 'RESIGNED').length} <span className="text-xs font-semibold text-slate-500">NS</span>
                   </span>
                 </div>
               </div>

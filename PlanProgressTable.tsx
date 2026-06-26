@@ -941,7 +941,7 @@ export default function PlanProgressTable({
               <tr className="hover:bg-slate-50/50 border-b border-slate-150">
                 <td className="py-4 px-3 text-center text-slate-500 font-medium border-r border-slate-150">1</td>
                 <td className="py-4 px-4 font-bold text-slate-800 border-r border-slate-150">
-                  DCLR <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DCLR' && e.status === 'WORKING').length} hiện hữu)</span>
+                  DCLR <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DCLR' && e.status !== 'RESIGNED').length} hiện hữu)</span>
                 </td>
                 <td className="py-4 px-4 text-center font-extrabold text-slate-705 border-r border-slate-150 bg-indigo-50/10">
                   <div className="flex items-center justify-center gap-1">
@@ -1069,7 +1069,7 @@ export default function PlanProgressTable({
               <tr className="hover:bg-slate-50/50 border-b border-slate-150">
                 <td className="py-4 px-3 text-center text-slate-500 font-medium border-r border-slate-150">2</td>
                 <td className="py-4 px-4 font-bold text-slate-800 border-r border-slate-150">
-                  DC RMA BG <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DC RMA BG' && e.status === 'WORKING').length} hiện hữu)</span>
+                  DC RMA BG <span className="text-[11px] font-normal text-slate-500">({employees.filter(e => e.line === 'DC RMA BG' && e.status !== 'RESIGNED').length} hiện hữu)</span>
                 </td>
                 <td className="py-4 px-4 text-center font-extrabold text-slate-750 border-r border-slate-150 bg-indigo-50/10">
                   <div className="flex items-center justify-center gap-1">
@@ -1196,7 +1196,7 @@ export default function PlanProgressTable({
               {/* Row 3: Total Row */}
               <tr className="bg-slate-50 font-bold border-t border-t-slate-300">
                 <td className="py-3 px-3 text-center border-r border-slate-150 text-slate-400 text-xs font-semibold" colSpan={4}>
-                  TỔNG CỘNG KH & THỰC TIẾP NHẬN (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS - Hiện hữu {employees.filter(e => e.status === 'WORKING').length} NS)
+                  TỔNG CỘNG KH & THỰC TIẾP NHẬN (Tổng định biên {capacities['DCLR'].target + capacities['DC RMA BG'].target} NS - Hiện hữu {employees.filter(e => e.status !== 'RESIGNED').length} NS)
                 </td>
                 {visibleDaysList.map((day, dIdx) => {
                   const dayPlanned = getDemandCount('DCLR', day) + getDemandCount('DC RMA BG', day);

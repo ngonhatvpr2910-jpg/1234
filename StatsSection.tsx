@@ -16,7 +16,7 @@ export default function StatsSection({ employees, selectedLine, lineCapacities, 
   const filteredList = employees.filter(emp => selectedLine === 'ALL' || emp.line === selectedLine);
   
   // Total Active
-  const totalActive = filteredList.filter(emp => emp.status === 'WORKING').length;
+  const totalActive = filteredList.filter(emp => emp.status !== 'RESIGNED').length;
   
   // Deduce Month/Year of each employee event for monitoring
   const getEventMonthYear = (targetDate?: string) => {
@@ -123,7 +123,7 @@ export default function StatsSection({ employees, selectedLine, lineCapacities, 
 
   // Total New Hires under 30 days (Ngày nhận việc dưới 30 ngày)
   const newHiresWorkingCount = filteredList.filter(emp => 
-    emp.status === 'WORKING' && isNewHire(emp.joinDate)
+    emp.status !== 'RESIGNED' && isNewHire(emp.joinDate)
   ).length;
 
   const newHiresOnboardingCount = filteredList.filter(emp => 
