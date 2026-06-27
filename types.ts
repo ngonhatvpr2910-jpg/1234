@@ -1,56 +1,51 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-export type EmployeeStatus = 'WORKING' | 'RESIGNED' | 'ONBOARDING' | 'LEAVE';
-
-export type AssemblyLine = 'DCLR' | 'DC RMA BG';
-
-export interface Employee {
+export interface DowntimeReport {
   id: string;
-  code: string;       // Employee Code (Mã nhân viên)
-  fullName: string;   // Full Name (Họ tên)
-  gender: 'Nam' | 'Nữ';
-  phone: string;
-  line: AssemblyLine; // Assembly line (Dây chuyền)
-  manager: string;    // Quản lý tiếp nhận (Khiêm, Thịnh)
-  joinDate: string;   // Onboarding date (Ngày nhận việc)
-  resignDate?: string;// Resignation date (Ngày bắt đầu nghỉ / Ngày nghỉ việc)
-  leaveEndDate?: string; // Tới Ngày (Ngày kết thúc nghỉ)
-  resignReason?: string; // Reason for leaving (Lý do nghỉ việc)
-  status: EmployeeStatus;
-  notes?: string;
-  
-  // Custom spreadsheet fields
-  department?: string;   // Phòng ban/Nhà máy
-  assemblyGroup?: string; // Phòng ban/Dây chuyền (e.g. Lắp ráp)
-  section?: string;      // Bộ phận/Tổ (e.g. Lắp ráp RO, Hàn)
-  birthday?: string;     // Ngày sinh (e.g. DD/MM/YYYY)
-  birthplace?: string;   // Nơi sinh
-  contract1Legal?: string; // Quá trình HD thứ 1 - Pháp nhân
-  contract1Start?: string; // Quá trình HD thứ 1 - Ngày bắt đầu
-  contract1End?: string;   // Quá trình HD thứ 1 - Ngày kết thúc
-  contractCode?: string;   // Mã HĐ
-  contractType2?: string;  // Loại HĐ 2
-  contract2Legal?: string; // Quá trình HD thứ 2 - Pháp nhân
-  contract2Start?: string; // Quá trình HD thứ 2 - Ngày bắt đầu
-  contract2End?: string;   // Quá trình HD thứ 2 - Ngày kết thúc
-  avatar?: string;         // Base64 profile picture string for ID cards
+  date: string; // YYYY-MM-DD
+  shift: 'Ca 1' | 'Ca 2' | 'Ca 3' | 'Ca HC';
+  line: string; // e.g., "Line A1", "Line A2", etc.
+  equipment: string; // Tên máy / công đoạn bị dừng (e.g., "Máy đùn", "Băng tải")
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  duration: number; // Thời gian dừng (phút), tính tự động hoặc nhập vào
+  reasonCategory: ReasonCategory;
+  details: string; // Chi tiết sự cố / nguyên nhân cụ thể
+  solution: string; // Biện pháp khắc phục
+  pic: string; // Người chịu trách nhiệm / Báo cáo
+  status: 'Đang xử lý' | 'Đã khắc phục';
+  createdAt: string;
+  productName: string; // Sản phẩm đang sản xuất
+  productUnitPrice: number; // Đơn giá sản phẩm (VNĐ)
+  standardRate: number; // Năng suất tiêu chuẩn (sản phẩm/giờ)
 }
 
-export interface DailyTargets {
-  in: number;
-  out: number;
-  demand?: number;    // Nhu cầu tuyển dụng theo ngày
-  reception?: number; // Kế hoạch tiếp nhận nhân sự theo ngày
-  actualIn?: number;  // Thực tế nhận việc (nhập tay/thực tế)
-  actualOut?: number; // Thực tế nghỉ việc (nhập tay/nghỉ việc)
-  tempWorkers?: number; // Nhân sự thời vụ
+export type ReasonCategory =
+  | 'Sự cố máy móc/thiết bị'
+  | 'Thiếu nguyên vật liệu'
+  | 'Thay đổi mã hàng/Gá đặt'
+  | 'Chờ kiểm tra chất lượng'
+  | 'Sự cố vận hành/Nhân sự'
+  | 'Sự cố điện/nước/khí nén'
+  | 'Lý do khác';
+
+export interface DowntimeFilters {
+  startDate: string;
+  endDate: string;
+  line: string;
+  reasonCategory: string;
+  status: string;
+  search: string;
 }
 
-export interface DayProgress {
-  date: string;       // e.g., "15-Jun"
-  fullDate: string;   // e.g., "2026-06-15"
-  targets: Record<AssemblyLine, DailyTargets>;
+export interface KPIStats {
+  totalDowntime: number; // Tổng phút dừng
+  totalIncidents: number; // Tổng số vụ dừng Line
+  averageDuration: number; // Thời gian dừng trung bình mỗi vụ (MTTR)
+  mostAffectedLine: {
+    name: string;
+    duration: number;
+  };
+  mostCommonReason: {
+    category: ReasonCategory | '';
+    count: number;
+  };
 }
