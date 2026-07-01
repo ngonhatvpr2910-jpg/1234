@@ -1,324 +1,600 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ShieldAlert, 
-  LayoutDashboard, 
-  History, 
-  Database,
-  PlusCircle,
-  FileSpreadsheet,
-  Clock,
-  HeartPulse,
-  Trash2
-} from 'lucide-react';
-import { DowntimeReport } from './types';
-import { INITIAL_DOWNTIME_REPORTS, PRODUCTS, Product } from './data';
-import KPICards from './KPICards';
-import DowntimeCharts from './DowntimeCharts';
-import DowntimeForm from './DowntimeForm';
-import DowntimeTable from './DowntimeTable';
-import ProductConfig from './ProductConfig';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-const LOCAL_STORAGE_KEY = 'sunhouse_downtime_reports';
-const LOCAL_STORAGE_PRODUCTS_KEY = 'sunhouse_products';
+import { useState, useEffect } from 'react';
+import { Employee, DayProgress, AssemblyLine } from './types';
+import { INITIAL_EMPLOYEES, DRILL_DATES, LINE_CAPACITIES } from './mockData';
+import StatsSection from './StatsSection';
+import PlanProgressTable from './PlanProgressTable';
+import EmployeeTable from './EmployeeTable';
+import EmployeeModal from './EmployeeModal';
+import EmployeeCardModal from './EmployeeCardModal';
+import AnalyticsSection from './AnalyticsSection';
+import DailyManpowerReport from './DailyManpowerReport';
+import { ClipboardList, BarChart3, Users, Settings, Briefcase, Sparkles, RefreshCw, Layers, AlertTriangle, Calendar } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
-  // 1. Quản lý danh sách báo cáo dừng Line (Tải từ localStorage nếu có)
-  const [reports, setReports] = useState<DowntimeReport[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Lỗi phân tích dữ liệu cũ:', e);
-      }
-    }
-    return INITIAL_DOWNTIME_REPORTS;
+  // --- STATE PERSISTENCE CLIENT-SIDE ---
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [dayProgress, setDayProgress] = useState<DayProgress[]>([]);
+  const [lineCapacities, setLineCapacities] = useState<Record<AssemblyLine, { target: number; currentBase: number }>>({
+    'DCLR': { target: 58, currentBase: 72 },
+    'DC RMA BG': { target: 15, currentBase: 7 }
   });
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  // Quản lý danh sách sản phẩm và giá bán (Tải từ localStorage nếu có)
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_PRODUCTS_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Lỗi phân tích dữ liệu sản phẩm:', e);
+  // Load from LocalStorage
+  useEffect(() => {
+    try {
+      const storedEmployees = localStorage.getItem('dclr_employees_v1');
+      const storedProgress = localStorage.getItem('dclr_progress_v1');
+      const storedCapacities = localStorage.getItem('dclr_capacities_v1');
+
+      if (storedCapacities) {
+        setLineCapacities(JSON.parse(storedCapacities));
+      } else {
+        setLineCapacities({
+          'DCLR': { target: 58, currentBase: 72 },
+          'DC RMA BG': { target: 15, currentBase: 7 }
+        });
       }
+
+      if (storedEmployees) {
+        let parsed = JSON.parse(storedEmployees) as Employee[];
+        // Purge any residual 6000200 test items we seeded in the last turn
+        const beforePurgeCount = parsed.length;
+        parsed = parsed.filter(e => !e.code.startsWith('6000200'));
+        if (parsed.length !== beforePurgeCount) {
+          localStorage.setItem('dclr_employees_v1', JSON.stringify(parsed));
+        }
+        setEmployees(parsed);
+      } else {
+        // Since we are changing to manual data entry, seed with INITIAL_EMPLOYEES so they have the baseline to start editing.
+        const cleanedInitial = INITIAL_EMPLOYEES.filter(e => !e.code.startsWith('6000200'));
+        setEmployees(cleanedInitial);
+        localStorage.setItem('dclr_employees_v1', JSON.stringify(cleanedInitial));
+      }
+
+      if (storedProgress) {
+        const parsed = JSON.parse(storedProgress) as DayProgress[];
+        const migrated = parsed.map(dp => {
+          const updatedTargets = { ...dp.targets };
+          for (const key of Object.keys(updatedTargets)) {
+            const lineKey = key as AssemblyLine;
+            if (updatedTargets[lineKey].demand === undefined) {
+              updatedTargets[lineKey].demand = updatedTargets[lineKey].in || 0;
+            }
+            if (updatedTargets[lineKey].reception === undefined) {
+              updatedTargets[lineKey].reception = updatedTargets[lineKey].in || 0;
+            }
+          }
+          return {
+            ...dp,
+            targets: updatedTargets
+          };
+        });
+        setDayProgress(migrated);
+      } else {
+        setDayProgress(DRILL_DATES);
+        localStorage.setItem('dclr_progress_v1', JSON.stringify(DRILL_DATES));
+      }
+    } catch (e) {
+      console.warn('LocalStorage load failed, starting with empty list:', e);
+      setEmployees([]);
+      setDayProgress(DRILL_DATES);
+    } finally {
+      setIsDataLoaded(true);
     }
-    return PRODUCTS;
-  });
-
-  // Lưu trạng thái vào localStorage bất cứ khi nào danh sách reports thay đổi
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reports));
-  }, [reports]);
-
-  // Lưu trạng thái vào localStorage bất cứ khi nào danh sách sản phẩm thay đổi
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_PRODUCTS_KEY, JSON.stringify(products));
-  }, [products]);
-
-  // 2. Các trạng thái giao diện (UI state)
-  const [activeTab, setActiveTab] = useState<'logs' | 'analytics' | 'products'>('logs');
-  const [showForm, setShowForm] = useState(false);
-  const [reportToEdit, setReportToEdit] = useState<DowntimeReport | null>(null);
-  
-  // Đồng hồ hiển thị thời gian thực ở Header
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
   }, []);
 
-  // 3. Thêm mới hoặc Cập nhật báo cáo
-  const handleSubmitReport = (formData: Omit<DowntimeReport, 'id' | 'createdAt'> & { id?: string }) => {
-    if (formData.id) {
-      // Chế độ CẬP NHẬT (Update/Edit)
-      setReports((prevReports) =>
-        prevReports.map((r) =>
-          r.id === formData.id
-            ? {
-                ...r,
-                ...formData,
-                // Giữ nguyên ngày tạo gốc
-                createdAt: r.createdAt,
-              }
-            : r
-        )
-      );
-      setReportToEdit(null);
-    } else {
-      // Chế độ THÊM MỚI (Add)
-      const newReport: DowntimeReport = {
-        ...formData,
-        id: `dt-${Date.now()}`,
-        createdAt: new Date().toISOString(),
+  // Save changes helper
+  const saveEmployeesToStorage = (updatedEmployees: Employee[]) => {
+    setEmployees(updatedEmployees);
+    try {
+      localStorage.setItem('dclr_employees_v1', JSON.stringify(updatedEmployees));
+    } catch (e) {
+      console.error('LocalStorage write failed:', e);
+    }
+  };
+
+  const saveProgressToStorage = (updatedProgress: DayProgress[]) => {
+    setDayProgress(updatedProgress);
+    try {
+      localStorage.setItem('dclr_progress_v1', JSON.stringify(updatedProgress));
+    } catch (e) {
+      console.error('LocalStorage write failed:', e);
+    }
+  };
+
+  const handleUpdateLineCapacities = (updatedCapacities: Record<AssemblyLine, { target: number; currentBase: number }>) => {
+    setLineCapacities(updatedCapacities);
+    try {
+      localStorage.setItem('dclr_capacities_v1', JSON.stringify(updatedCapacities));
+    } catch (e) {
+      console.error('LocalStorage write failed:', e);
+    }
+  };
+
+  // Reset to default data
+  const handleResetData = () => {
+    if (window.confirm('Bạn có chắc chắn muốn XÓA SẠCH toàn bộ danh sách nhân sự hiện tại để làm việc từ đầu không?')) {
+      saveEmployeesToStorage([]);
+      saveProgressToStorage(DRILL_DATES);
+    }
+  };
+
+  // --- FILTERS & INTERACTIVE STATE ---
+  const [selectedLine, setSelectedLine] = useState<AssemblyLine | 'ALL'>('ALL');
+  const [activeTab, setActiveTab] = useState<'monitors' | 'recruitments' | 'analytics' | 'daily_report'>('monitors');
+
+  // Modal controller
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'ADD' | 'EDIT' | 'RESIGN'>('ADD');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+  // Custom delete confirmation modal state
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
+
+  // Employee ID Card generation modal states
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [cardEmployee, setCardEmployee] = useState<Employee | null>(null);
+
+  const handleOpenCardModal = (employee: Employee | null) => {
+    setCardEmployee(employee);
+    setIsCardModalOpen(true);
+  };
+
+  // --- EMPLOYEE OPERATION HANDLERS ---
+  const handleAddEmployeeClick = () => {
+    setSelectedEmployee(null);
+    setModalMode('ADD');
+    setIsModalOpen(true);
+  };
+
+  const handleEditEmployeeClick = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setModalMode('EDIT');
+    setIsModalOpen(true);
+  };
+
+  const handleResignEmployeeClick = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setModalMode('RESIGN');
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteEmployee = (id: string) => {
+    setDeleteConfirmationId(id);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteConfirmationId) return;
+    const updated = employees.filter(e => e.id !== deleteConfirmationId);
+    saveEmployeesToStorage(updated);
+    setDeleteConfirmationId(null);
+  };
+
+  const handleSaveEmployee = (employeeData: Partial<Employee>) => {
+    let updated: Employee[] = [];
+
+    if (modalMode === 'ADD') {
+      // Add new employee
+      const newEmp: Employee = {
+        id: `emp-new-${Date.now()}`,
+        code: employeeData.code || `DCLR-${Math.floor(100 + Math.random() * 900)}`,
+        fullName: employeeData.fullName || 'Nhân sự mới',
+        gender: employeeData.gender || 'Nam',
+        phone: employeeData.phone || '',
+        line: employeeData.line || 'DCLR',
+        manager: employeeData.manager || 'KHIÊM',
+        joinDate: employeeData.joinDate || '2026-06-15',
+        status: employeeData.status || 'WORKING',
+        notes: employeeData.notes || '',
+        resignDate: employeeData.resignDate,
+        resignReason: employeeData.resignReason
       };
-      setReports((prevReports) => [newReport, ...prevReports]);
+      updated = [...employees, newEmp];
+    } else {
+      // Edit or Resign employee
+      updated = employees.map(emp => {
+        if (emp.id === employeeData.id) {
+          const merged = {
+            ...emp,
+            ...employeeData
+          } as Employee;
+          
+          if (merged.status === 'WORKING' || merged.status === 'ONBOARDING') {
+            delete merged.resignDate;
+            delete merged.resignReason;
+          }
+          return merged;
+        }
+        return emp;
+      });
     }
-    setShowForm(false);
+
+    saveEmployeesToStorage(updated);
+    setIsModalOpen(false);
   };
 
-  // 4. Kích hoạt chỉnh sửa báo cáo
-  const handleEditClick = (report: DowntimeReport) => {
-    setReportToEdit(report);
-    setShowForm(true);
-    // Cuộn mượt lên vị trí Form
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleImportEmployees = (newEmployees: Employee[]) => {
+    const updated = [...employees];
+    newEmployees.forEach(newEmp => {
+      const idx = updated.findIndex(e => e.code === newEmp.code);
+      if (idx > -1) {
+        updated[idx] = {
+          ...updated[idx],
+          ...newEmp,
+          id: updated[idx].id
+        };
+      } else {
+        updated.push(newEmp);
+      }
+    });
+    saveEmployeesToStorage(updated);
   };
 
-  // 5. Xóa báo cáo
-  const handleDeleteClick = (id: string) => {
-    setReports((prevReports) => prevReports.filter((r) => r.id !== id));
+  const handleUpdateJoinDate = (id: string, newDate: string) => {
+    const updated = employees.map(emp => {
+      if (emp.id === id) {
+        return {
+          ...emp,
+          joinDate: newDate
+        };
+      }
+      return emp;
+    });
+    saveEmployeesToStorage(updated);
   };
 
-  // 6. Reset về dữ liệu mẫu mặc định
-  const handleResetToDemo = () => {
-    if (confirm('Bạn có chắc muốn khôi phục toàn bộ dữ liệu mẫu mặc định không? Tất cả các báo cáo do bạn tự thêm sẽ bị ghi đè.')) {
-      setReports(INITIAL_DOWNTIME_REPORTS);
-      setShowForm(false);
-      setReportToEdit(null);
+  const handleUpdateLine = (id: string, newLine: AssemblyLine) => {
+    const updated = employees.map(emp => {
+      if (emp.id === id) {
+        return {
+          ...emp,
+          line: newLine,
+          manager: newLine === 'DCLR' ? 'KHIÊM' : 'THỊNH'
+        };
+      }
+      return emp;
+    });
+    saveEmployeesToStorage(updated);
+  };
+
+  const handleUpdateField = (id: string, field: keyof Employee, value: any) => {
+    const updated = employees.map(emp => {
+      if (emp.id === id) {
+        const updatedEmp = {
+          ...emp,
+          [field]: value
+        } as Employee;
+        // Auto update manager if line is changed
+        if (field === 'line') {
+          updatedEmp.manager = value === 'DCLR' ? 'KHIÊM' : 'THỊNH';
+        }
+        // Clear resign info if returning to active status
+        if (field === 'status' && (value === 'WORKING' || value === 'ONBOARDING')) {
+          delete updatedEmp.resignDate;
+          delete updatedEmp.resignReason;
+        }
+        return updatedEmp;
+      }
+      return emp;
+    });
+    saveEmployeesToStorage(updated);
+  };
+
+  const handleUpdateTargets = (updatedProgress: DayProgress[]) => {
+    saveProgressToStorage(updatedProgress);
+  };
+
+  const getTodayString = () => {
+    const today = new Date();
+    if (today.getFullYear() < 2026) {
+      today.setFullYear(2026);
+      today.setMonth(5); // June
+      today.setDate(18);
     }
+    const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mmm = monthNames[today.getMonth()];
+    const yyyy = today.getFullYear();
+    const dayName = days[today.getDay()];
+    
+    return `${dd}-${mmm}-${yyyy} (${dayName})`;
   };
+
+  if (!isDataLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw size={40} className="text-blue-600 animate-spin" />
+          <p className="text-sm font-semibold text-slate-500">Đang khởi tạo hệ thống quản lý...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
       
-      {/* HEADER DOANH NGHIỆP - Tông đỏ Sunhouse thương hiệu */}
-      <header className="bg-[#B71C1C] text-white shadow-md border-b-4 border-[#8E1010]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          
-          {/* Logo & Tiêu đề */}
-          <div className="flex items-center space-x-3.5">
-            <div className="bg-white p-2 rounded-lg shadow-inner flex items-center justify-center">
-              <ShieldAlert className="w-8 h-8 text-[#B71C1C]" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="bg-[#FFE082] text-[#5D4037] text-[10px] font-bold px-2 py-0.5 rounded tracking-wide uppercase">
-                  Nhà máy Sunhouse
-                </span>
-                <span className="text-[10px] text-red-100 font-medium">Hệ thống IoT & Giám sát</span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight mt-0.5">
-                BÁO CÁO THỜI GIAN DỪNG LINE SẢN XUẤT
-              </h1>
-            </div>
+      {/* DECORATION TOP BAR */}
+      <header className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md relative overflow-hidden" id="app-header">
+        
+        {/* Subtle geometric lines */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
+
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
+              QUẢN LÝ NHÂN SỰ DCLR
+            </h1>
           </div>
 
-          {/* Widget Thời gian thực & Tiện ích */}
-          <div className="flex items-center space-x-4 self-stretch md:self-auto justify-between md:justify-end">
-            <div className="flex items-center space-x-2 bg-[#8E1010]/50 px-3 py-2 rounded-lg text-xs font-mono border border-red-800">
-              <Clock className="w-4 h-4 text-amber-300" />
-              <div>
-                <span className="text-red-200">Giờ hiện tại:</span>{' '}
-                <span className="font-bold text-white">
-                  {currentTime.toLocaleTimeString('vi-VN')}
-                </span>
+          <div className="flex items-center gap-3 w-auto">
+            {/* Clock Widget / simulated time indicator */}
+            <div className="bg-slate-800/80 backdrop-blur-xs border border-slate-700 rounded-xl px-4 py-2.5 flex items-center gap-4">
+              <div className="text-right">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-widest">Thời gian Chuyền</span>
+                <span className="text-xs font-extrabold text-blue-400">{getTodayString()}</span>
               </div>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
           </div>
-
         </div>
       </header>
 
-      {/* BODY CHÍNH */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 w-full">
-        
-        {/* KPI DASHBOARD SECTION */}
-        <section aria-label="Thống kê hiệu năng dừng Line">
-          <KPICards reports={reports} />
-        </section>
 
-        {/* CONTAINER NHẬP BÁO CÁO (Thu gọn / Mở rộng mượt mà) */}
-        <AnimatePresence initial={false}>
-          {showForm && (
-            <motion.section
-              id="form-section"
-              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-              animate={{ 
-                opacity: 1, 
-                height: 'auto',
-                marginBottom: 24,
-                transition: { height: { type: 'spring', stiffness: 200, damping: 25 }, opacity: { duration: 0.2 } }
-              }}
-              exit={{ opacity: 0, height: 0, marginBottom: 0, transition: { height: { duration: 0.2 }, opacity: { duration: 0.1 } } }}
-              className="overflow-hidden"
-            >
-              <DowntimeForm
-                reportToEdit={reportToEdit}
-                onSubmit={handleSubmitReport}
-                onCancel={() => {
-                  setShowForm(false);
-                  setReportToEdit(null);
-                }}
-                products={products}
-              />
-            </motion.section>
-          )}
-        </AnimatePresence>
-
-        {/* PHÂN VÙNG CHỨC NĂNG - TABS DƯỚI DẠNG THIẾT KẾ ĐẸP MẮT */}
-        <div className="bg-white p-2 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
+      {/* INTERPRETATIVE QUICK CONTROL PANEL */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-stretch md:items-center py-3 gap-4">
           
-          {/* Tabs chuyển đổi */}
-          <div className="flex bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+          {/* TAB CHANGER NAVIGATION */}
+          <nav className="flex gap-1.5 bg-slate-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto" id="app-tabs">
             <button
-              onClick={() => {
-                setActiveTab('logs');
-                setShowForm(false);
-                setReportToEdit(null);
-              }}
-              className={`flex-1 sm:flex-initial px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'logs'
-                  ? 'bg-white text-red-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => setActiveTab('monitors')}
+              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'monitors' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
             >
-              <History className="w-4 h-4" />
-              Nhật Ký Dừng Line
+              <Users size={14} />
+              <span>GĐ 1: Giám Sát & Danh Sách</span>
             </button>
             <button
-              onClick={() => {
-                setActiveTab('analytics');
-                setShowForm(false);
-                setReportToEdit(null);
-              }}
-              className={`flex-1 sm:flex-initial px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'analytics'
-                  ? 'bg-white text-red-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => setActiveTab('recruitments')}
+              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'recruitments' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
             >
-              <LayoutDashboard className="w-4 h-4" />
-              Biểu Đồ Trực Quan
+              <ClipboardList size={14} />
+              <span>GĐ 2: Theo dõi Tiến độ Tuyển dụng</span>
             </button>
             <button
-              onClick={() => {
-                setActiveTab('products');
-                setShowForm(false);
-                setReportToEdit(null);
-              }}
-              className={`flex-1 sm:flex-initial px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'products'
-                  ? 'bg-white text-red-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => setActiveTab('analytics')}
+              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              Sản Phẩm & Giá Bán
+              <BarChart3 size={14} />
+              <span>GĐ 3: Biểu Đồ & Thống kê</span>
             </button>
-          </div>
+            <button
+              onClick={() => setActiveTab('daily_report')}
+              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${activeTab === 'daily_report' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
+            >
+              <Calendar size={14} />
+              <span>GĐ 4: Báo Cáo Chuyên cần Gộp</span>
+            </button>
+          </nav>
 
-          {/* Quick Stats Banner */}
-          <div className="flex items-center gap-3 text-xs text-slate-500 font-semibold self-stretch sm:self-auto justify-end px-2">
-            <span className="flex items-center gap-1">
-              <HeartPulse className="w-4 h-4 text-emerald-500" />
-              Tỷ lệ chạy Line: <span className="font-bold text-slate-800">97.8%</span>
-            </span>
-            <span className="h-4 w-px bg-slate-200" />
-            <span>Mã nhà xưởng: <span className="font-bold text-slate-800">SHD-SH1</span></span>
+          {/* TEAM CHANGER SELECT LINKED DIRECTLY TO DCLR IN IMAGE */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-1 rounded-xl">
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Phạm vi Chuyền:</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setSelectedLine('ALL')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition ${selectedLine === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+              >
+                TẤT CẢ
+              </button>
+              <button
+                onClick={() => setSelectedLine('DCLR')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition ${selectedLine === 'DCLR' ? 'bg-indigo-650 bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+              >
+                DCLR (Khiêm)
+              </button>
+              <button
+                onClick={() => setSelectedLine('DC RMA BG')}
+                className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg transition ${selectedLine === 'DC RMA BG' ? 'bg-indigo-650 bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+              >
+                RMA BG (Thịnh)
+              </button>
+            </div>
           </div>
 
         </div>
+      </div>
 
-        {/* NỘI DUNG TABS CHUYỂN ĐỔI */}
-        <div className="transition-all duration-300">
-          {activeTab === 'logs' ? (
-            <section aria-label="Bảng nhật ký sự cố dừng Line">
-              <DowntimeTable
-                reports={reports}
-                onEdit={handleEditClick}
-                onDelete={handleDeleteClick}
-                onAddNewClick={() => {
-                  setReportToEdit(null);
-                  setShowForm(true);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </section>
-          ) : activeTab === 'analytics' ? (
-            <section aria-label="Biểu đồ phân tích thời gian dừng Line">
+
+      {/* MAIN CONTAINER CONTENT BODY */}
+      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+        
+        {/* STATS OVERVIEW IS CONSTANTLY VISIBLE TO REDUCE BLIND SPOTS */}
+        <StatsSection employees={employees} selectedLine={selectedLine} lineCapacities={lineCapacities} dayProgress={dayProgress} />
+
+        {/* TRANSITIONAL TAB STATES ANIMATED WITH MOTION */}
+        <div className="mt-4">
+          <AnimatePresence mode="wait">
+            
+            {/* TAB 1: OVERVIEW DIRECTORY */}
+            {activeTab === 'monitors' && (
               <motion.div
-                initial={{ opacity: 0, y: 15 }}
+                key="monitors-tab"
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
               >
-                <DowntimeCharts reports={reports} />
-              </motion.div>
-            </section>
-          ) : (
-            <section aria-label="Danh mục sản phẩm và giá bán">
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ProductConfig 
-                  products={products}
-                  onUpdateProducts={setProducts}
-                  onResetProducts={() => setProducts(PRODUCTS)}
+                <EmployeeTable
+                  employees={employees}
+                  onAddClick={handleAddEmployeeClick}
+                  onEditClick={handleEditEmployeeClick}
+                  onResignClick={handleResignEmployeeClick}
+                  onDeleteClick={handleDeleteEmployee}
+                  onImportEmployees={handleImportEmployees}
+                  onUpdateJoinDate={handleUpdateJoinDate}
+                  onUpdateLine={handleUpdateLine}
+                  onUpdateField={handleUpdateField}
+                  onPrintCardClick={handleOpenCardModal}
                 />
               </motion.div>
-            </section>
-          )}
-        </div>
+            )}
 
+            {/* TAB 2: EXCEL RECRUIMENT BOARD */}
+            {activeTab === 'recruitments' && (
+              <motion.div
+                key="recruitments-tab"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+              >
+                <PlanProgressTable
+                  employees={employees}
+                  dayProgress={dayProgress}
+                  onUpdateTargets={handleUpdateTargets}
+                  lineCapacities={lineCapacities}
+                  onUpdateLineCapacities={handleUpdateLineCapacities}
+                />
+              </motion.div>
+            )}
+
+            {/* TAB 3: HR ANALYTICS CHARTS */}
+            {activeTab === 'analytics' && (
+              <motion.div
+                key="analytics-tab"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+              >
+                <AnalyticsSection 
+                  employees={employees} 
+                  selectedLine={selectedLine} 
+                  dayProgress={dayProgress}
+                  onUpdateEmployees={saveEmployeesToStorage}
+                />
+              </motion.div>
+            )}
+
+            {/* TAB 4: DAILY MANPOWER REPORT */}
+            {activeTab === 'daily_report' && (
+              <motion.div
+                key="daily-report-tab"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+              >
+                <DailyManpowerReport
+                  employees={employees}
+                  dayProgress={dayProgress}
+                  selectedLine={selectedLine}
+                  onUpdateDayProgress={saveProgressToStorage}
+                />
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </div>
       </main>
 
-      {/* FOOTER */}
-      <footer className="bg-slate-950 text-slate-400 py-6 mt-12 border-t border-slate-900 text-center text-xs">
-        <div className="max-w-7xl mx-auto px-4">
-          <p className="font-semibold text-slate-300">HỆ THỐNG BÁO CÁO THỜI GIAN DỪNG LINE SẢN XUẤT - NHÀ MÁY SUNHOUSE</p>
-          <p className="mt-1.5 text-slate-500">
-            Hỗ trợ ghi chép dữ liệu trực tiếp, phân tích biểu đồ Pareto nguyên nhân sụt giảm năng suất và xuất bảng tính Excel.
-          </p>
-          <p className="mt-4 text-[10px] text-slate-600">
-            &copy; 2026 Sunhouse Group. All rights reserved. Tiêu chuẩn ISO 9001:2015.
-          </p>
-        </div>
-      </footer>
+
+      {/* CENTRALIZED MODAL ENGINE */}
+      <EmployeeCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        employee={cardEmployee}
+        allEmployees={employees}
+        onUpdateEmployee={(updatedEmp) => {
+          const updated = employees.map(e => e.id === updatedEmp.id ? updatedEmp : e);
+          saveEmployeesToStorage(updated);
+          if (cardEmployee && cardEmployee.id === updatedEmp.id) {
+            setCardEmployee(updatedEmp);
+          }
+        }}
+      />
+      <EmployeeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveEmployee}
+        employee={selectedEmployee}
+        mode={modalMode}
+      />
+
+      {/* CUSTOM BEAUTIFUL DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {deleteConfirmationId && (() => {
+          const emp = employees.find(e => e.id === deleteConfirmationId);
+          if (!emp) return null;
+          return (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ duration: 0.15 }}
+                className="bg-white rounded-2xl shadow-xl border border-slate-150 max-w-md w-full overflow-hidden"
+              >
+                {/* Header info */}
+                <div className="p-6 pb-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 flex-shrink-0">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-slate-950 text-base leading-6">Xác nhận xóa nhân sự</h3>
+                      <p className="text-slate-500 text-xs leading-relaxed">
+                        Hành động này sẽ xóa vĩnh viễn dữ liệu của nhân sự khỏi hệ thống và không thể khôi phục lại.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main content body showing targeted employee details */}
+                <div className="bg-slate-50/70 border-y border-slate-100 px-6 py-4 space-y-3">
+                  <div className="grid grid-cols-3 gap-y-2 text-xs">
+                    <span className="text-slate-400 font-medium col-span-1">Mã nhân sự:</span>
+                    <span className="font-mono font-bold text-slate-700 col-span-2">{emp.code}</span>
+
+                    <span className="text-slate-400 font-medium col-span-1">Họ và Tên:</span>
+                    <span className="font-bold text-slate-900 col-span-2">{emp.fullName}</span>
+
+                    <span className="text-slate-400 font-medium col-span-1">Dây chuyền:</span>
+                    <span className="font-semibold text-slate-800 col-span-2">{emp.line}</span>
+                  </div>
+                </div>
+
+                {/* Action controls */}
+                <div className="px-6 py-4 flex items-center justify-end gap-3 bg-white">
+                  <button
+                    onClick={() => setDeleteConfirmationId(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-xl border border-slate-200 transition cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-sm hover:shadow transition cursor-pointer"
+                  >
+                    Đồng ý xóa
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
 
     </div>
   );

@@ -693,9 +693,12 @@ export default function AnalyticsSection({ employees, selectedLine, dayProgress 
               ))}
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-1.5">
               <p className="text-[11px] text-slate-400 font-bold italic">
                 * Dữ liệu chuyên cần được tính toán trực tiếp từ thời gian đi làm thực tế và các phép nghỉ của nhân viên.
+              </p>
+              <p className="text-[11px] text-slate-400 font-bold italic">
+                * Công thức tính bình quân tuần = (Tổng lượt đi làm trong tuần / Tổng lượt hiện hữu trong tuần) × 100
               </p>
             </div>
 
